@@ -17,7 +17,7 @@ beforeEach(function () {
     ]));
 });
 
-afterEach(fn () => File::deleteDirectory($this->path));
+afterEach(fn () => File::deleteDirectory(storage_path('framework/testing/docs')));
 
 it('writes embeddings into the pgvector column and is idempotent', function () {
     $indexer = app(DocFileIndexer::class);
