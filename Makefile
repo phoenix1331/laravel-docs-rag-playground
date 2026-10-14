@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help up down build shell migrate seed test test-pgsql logs fresh
+.PHONY: help up down build shell migrate seed test test-pgsql lint lint-test logs fresh
 
 EXEC = docker compose exec app
 
@@ -29,6 +29,12 @@ test: ## Run the test suite (SQLite in memory)
 
 test-pgsql: ## Run Postgres-only tests against laravel_testing
 	@$(EXEC) env DB_CONNECTION=pgsql DB_DATABASE=laravel_testing php artisan test --group=pgsql
+
+lint: ## Fix code style with Pint
+	@$(EXEC) ./vendor/bin/pint
+
+lint-test: ## Check code style without changing files
+	@$(EXEC) ./vendor/bin/pint --test
 
 logs: ## Tail app container logs
 	@docker compose logs -f app
