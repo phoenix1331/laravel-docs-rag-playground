@@ -1,0 +1,5 @@
+.git
+.claude
+node_modules
+vendor
+storage/app/docs
