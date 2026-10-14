@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace App\Providers;
 
+use App\Contracts\Embedder;
+use App\Services\Embeddings\AiSdkEmbedder;
+use App\Services\Embeddings\FakeEmbedder;
 use Illuminate\Foundation\DevCommands;
 use Illuminate\Support\ServiceProvider;
 
@@ -14,7 +17,15 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->singleton(Embedder::class, function (): Embedder {
+            $config = config('rag.embedding');
+
+            if ($config['provider'] === 'fake') {
+                return new FakeEmbedder($config['dimensions']);
+            }
+
+            return new AiSdkEmbedder($config['provider'], $config['model'], $config['dimensions'], $config['batch_size']);
+        });
     }
 
     /**

@@ -33,6 +33,8 @@ Inside the network the app reaches `pgsql:5432` and `redis:6379`.
 | Answers | Anthropic `claude-opus-5-5` | OpenAI chat model | `RAG_CHAT_PROVIDER`, `RAG_CHAT_MODEL` |
 
 - Switching is `.env` only; any embedding-capable provider in `config/ai.php` works
+- `RAG_EMBEDDING_PROVIDER=fake` uses the offline `FakeEmbedder` (word-hashing vectors) for local runs without an API key
+- Embedding goes through `App\Contracts\Embedder` (`embedDocuments()`, `embedQuery()`); `AiSdkEmbedder` wraps `Laravel\Ai\Embeddings`, batches by `RAG_EMBEDDING_BATCH_SIZE`, checks counts and dimensions, and sends Voyage `input_type` document/query
 - Changing embedding model or dimensions needs `make fresh` then a fresh ingest: the vector column is sized from config and vectors from different models are not comparable
 - `config/ai.php` defaults follow the same `RAG_*_PROVIDER` env keys; `config/rag.php` holds model, chunking, retrieval and docs-source settings
 
@@ -56,7 +58,7 @@ Inside the network the app reaches `pgsql:5432` and `redis:6379`.
 | `tests/Unit`, `tests/Feature` | SQLite in memory | `make test` |
 | `tests/Pgsql` (group `pgsql`) | Postgres `laravel_testing` | `make test-pgsql`; skipped under `make test` |
 
-Migrations check the driver and skip pgvector-only columns/indexes on SQLite.
+Migrations check the driver and skip pgvector-only columns/indexes on SQLite. `tests/TestCase.php` binds `FakeEmbedder` and calls `Embeddings::fake()->preventStrayEmbeddings()`, so no test can reach a real API.
 
 ## Key files
 
@@ -65,6 +67,7 @@ Migrations check the driver and skip pgvector-only columns/indexes on SQLite.
 | `Dockerfile` | FrankenPHP image with pgsql/redis/pcntl extensions, Composer, Node 24, `git`; runs as UID 1000 |
 | `docker-compose.yml` | `app`, `pgsql`, `redis` with healthchecks |
 | `docker/pgsql/init.sql` | Creates `laravel_testing` and enables the `vector` extension in both databases |
+| `app/Contracts/Embedder.php`, `app/Services/Embeddings/` | Embedding contract, AI SDK implementation, deterministic fake |
 | `config/rag.php` | Embedding/chat provider and model, chunk limits, top k, similarity threshold, retrieval mode, docs source |
 | `Makefile` | All developer commands; `make help` lists them |
 | `pint.json` | Laravel preset plus `declare_strict_types` on every PHP file |
