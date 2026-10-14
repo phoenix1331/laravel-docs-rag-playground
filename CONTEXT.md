@@ -77,6 +77,9 @@ Every provider is chosen in `.env`; `.env.example` lists the valid values for ea
 | `App\Jobs\IngestDocFile` | Queued, batchable wrapper; releases with backoff (15s up to 300s, 8 tries) on rate limit, overloaded or connection errors; other errors fail |
 | `App\Ingestion\IngestStats` | Per-batch cache counters (`embedded`, `reused`, `unchanged`, `deleted`) for reporting |
 
+- `php artisan docs:ingest {version} {--fresh} {--no-pull} {--no-wait}`: syncs the clone, dispatches one `IngestDocFile` per page in a `Bus::batch` (`allowFailures`), shows progress, prints totals
+- The batch `then` callback deletes chunks for pages no longer in the version; it only runs when every page succeeded, so a failed page is never wiped
+- Refuses to run when stored chunks for the version use another `embedding_model`, unless `--fresh`
 - Identical content under a new anchor reuses the stored vector (`reused`), so section moves cost nothing
 - Upserts go through `DB::table()` with the vector as a JSON array literal, which pgvector parses directly
 

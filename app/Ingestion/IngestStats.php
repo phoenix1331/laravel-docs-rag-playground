@@ -16,9 +16,14 @@ class IngestStats
     public static function record(string $batchId, IndexResult $result): void
     {
         foreach ($result->toArray() as $metric => $count) {
-            Cache::add(self::key($batchId, $metric), 0, now()->addDay());
-            Cache::increment(self::key($batchId, $metric), $count);
+            self::add($batchId, $metric, $count);
         }
+    }
+
+    public static function add(string $batchId, string $metric, int $count): void
+    {
+        Cache::add(self::key($batchId, $metric), 0, now()->addDay());
+        Cache::increment(self::key($batchId, $metric), $count);
     }
 
     /**
