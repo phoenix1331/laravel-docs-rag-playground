@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help up down build shell migrate seed tinker test test-pgsql lint lint-test logs fresh
+.PHONY: help up down build shell migrate seed tinker ingest horizon-restart test test-pgsql lint lint-test logs fresh
 
 EXEC = docker compose exec app
 
@@ -20,6 +20,12 @@ shell: ## Open a shell in the app container
 
 tinker: ## Open tinker in the app container
 	@docker compose exec -e XDG_CONFIG_HOME=/tmp app php artisan tinker
+
+ingest: ## Ingest a docs version, e.g. make ingest V=13.x ARGS=--fresh
+	@$(EXEC) php artisan docs:ingest $(or $(V),13.x) $(ARGS)
+
+horizon-restart: ## Restart Horizon workers to pick up code changes
+	@$(EXEC) php artisan horizon:terminate
 
 migrate: ## Run database migrations
 	@$(EXEC) php artisan migrate

@@ -54,11 +54,12 @@ class AppServiceProvider extends ServiceProvider
     }
 
     /**
-     * Serve the app through FrankenPHP rather than "artisan serve" when running "artisan dev".
+     * Serve the app through FrankenPHP rather than "artisan serve", and let Horizon (which registers
+     * itself) process the queue instead of "queue:listen", when running "artisan dev".
      */
     protected function registerDevCommands(): void
     {
-        DevCommands::except('server');
+        DevCommands::except('server', 'queue');
         DevCommands::register('frankenphp php-server --listen :8000 --root public', 'frankenphp');
     }
 }

@@ -9,7 +9,7 @@ Laravel 13 playground that answers questions about the Laravel documentation usi
 | Framework | Laravel 13, PHP 8.4 |
 | Runtime | Docker, FrankenPHP (`dunglas/frankenphp:php8.4`) |
 | Database | PostgreSQL 17 with pgvector (`pgvector/pgvector:pg17`) |
-| Queue / cache | Redis 8 |
+| Queue / cache | Redis 8, Horizon |
 | Tests | Pest, SQLite in memory by default |
 | AI | Laravel AI SDK (`laravel/ai`) |
 | Front end | Vite + Tailwind (Livewire to follow) |
@@ -18,7 +18,7 @@ Laravel 13 playground that answers questions about the Laravel documentation usi
 
 | Service | Container port | Host port | Notes |
 |---|---|---|---|
-| `app` | 8000 | `APP_PORT` (8000) | FrankenPHP via `php artisan dev` |
+| `app` | 8000 | `APP_PORT` (8000) | `php artisan dev`: FrankenPHP, Horizon, Pail, Vite; dashboard at `/horizon` |
 | `app` (Vite) | 5173 | `VITE_PORT` (5173) | HMR host is `localhost` |
 | `pgsql` | 5432 | `FORWARD_DB_PORT` (5433) | 5432 is taken on the dev host |
 | `redis` | 6379 | `FORWARD_REDIS_PORT` (6379) | Queue and cache store |
@@ -114,7 +114,7 @@ Migrations check the driver and skip pgvector-only columns/indexes on SQLite. `t
 | `docker/pgsql/init.sql` | Creates `laravel_testing` and enables the `vector` extension in both databases |
 | `app/Contracts/Embedder.php`, `app/Services/Embeddings/` | Embedding contract, AI SDK implementation, deterministic fake |
 | `config/rag.php` | Embedding/chat provider and model, chunk limits, top k, similarity threshold, retrieval mode, docs source |
-| `Makefile` | All developer commands; `make help` lists them |
+| `Makefile` | All developer commands; `make help` lists them (`make ingest V=13.x`, `make horizon-restart` after code changes) |
 | `pint.json` | Laravel preset plus `declare_strict_types` on every PHP file |
 | `.husky/` | `commit-msg` (lowercase conventional commits, no scopes) and `pre-commit` (Pint, osv-scanner on `composer.lock`); hook bodies are POSIX `sh` |
 | `app/Providers/AppServiceProvider.php` | Swaps the default `artisan serve` dev command for `frankenphp php-server` |
@@ -125,7 +125,9 @@ Migrations check the driver and skip pgvector-only columns/indexes on SQLite. `t
 |---|---|
 | PostgreSQL over MySQL | Laravel 13's native `vector` column and `whereVectorSimilarTo` target pgvector; Postgres full-text search (`tsvector`) enables hybrid search in one database |
 | Postgres over MongoDB Atlas | Atlas auto-embedding hides the embedding step this project exists to teach; pgvector keeps embed, store and query explicit |
-| `php artisan dev` serves through FrankenPHP | Keeps the single dev entry point (server, queue, logs, Vite) while using FrankenPHP instead of the PHP built-in server |
+| `php artisan dev` serves through FrankenPHP and runs Horizon | One dev entry point; `artisan serve` and `queue:listen` are excluded in `AppServiceProvider`, Horizon registers itself as a dev command, so no separate worker container is needed |
+| Low ingest concurrency | `RAG_INGEST_WORKERS` (default 2) Horizon processes; free embedding tiers rate limit, and jobs back off rather than fail |
+| Long queue timeouts | Horizon supervisor timeout 310s > `IngestDocFile::$timeout` 300s; Redis `retry_after` 330s so slow jobs are not handed out twice |
 | Container runs as UID 1000 | Files created in the bind mount stay owned by the host user |
 | SQLite in memory for tests | Fast and isolated; Postgres-only features (vector, `tsvector`) are guarded by driver and covered by a separate `pgsql` test group against `laravel_testing` |
 | Voyage AI embeddings, Claude answers, OpenAI optional | Anthropic has no embeddings API; Voyage is its recommended partner. OpenAI can replace either via `.env` |
