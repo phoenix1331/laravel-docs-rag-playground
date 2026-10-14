@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Providers;
 
+use App\Chunking\MarkdownChunker;
 use App\Contracts\Embedder;
+use App\Docs\DocsRepository;
 use App\Services\Embeddings\AiSdkEmbedder;
 use App\Services\Embeddings\FakeEmbedder;
 use Illuminate\Foundation\DevCommands;
@@ -29,6 +31,18 @@ class AppServiceProvider extends ServiceProvider
 
             return new AiSdkEmbedder($config['provider'], $model, $config['dimensions'], $config['batch_size']);
         });
+
+        $this->app->bind(MarkdownChunker::class, fn () => new MarkdownChunker(
+            config('rag.chunking.max_tokens'),
+            config('rag.chunking.min_tokens'),
+        ));
+
+        $this->app->bind(DocsRepository::class, fn () => new DocsRepository(
+            config('rag.docs.repository'),
+            config('rag.docs.path'),
+            config('rag.docs.base_url'),
+            config('rag.docs.versions'),
+        ));
     }
 
     /**

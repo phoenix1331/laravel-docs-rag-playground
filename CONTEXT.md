@@ -43,6 +43,15 @@ Every provider is chosen in `.env`; `.env.example` lists the valid values for ea
 - Free tiers are busy: `gemini-3.8-flash` often returns overloaded errors, `gemini-3.1-flash-lite` is more reliable
 - Claude Pro does not include API credit; the Anthropic API is billed separately via console.anthropic.com
 
+## Docs source
+
+`App\Docs\DocsRepository` keeps a shallow clone of `laravel/docs` per version branch in `storage/app/docs/{version}` (gitignored).
+
+- `sync()` clones (`--depth 1 --single-branch`) or fetches and resets to the branch head; returns the commit
+- `files()` lists `*.md` pages, skipping `documentation.md` (sidebar), `license.md`, `readme.md`
+- `url()` builds `https://laravel.com/docs/{version}/{page}#{anchor}`
+- Versions must be listed in `rag.docs.versions`; anything else is rejected (also guards the filesystem path)
+
 ## Chunking
 
 `App\Chunking\MarkdownChunker` (framework-free) turns one docs page into `App\Chunking\Chunk` value objects.
