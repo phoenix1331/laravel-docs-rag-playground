@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+
+# Linting
+echo "running pint..."
+if ! ./vendor/bin/pint --test; then
+  echo "error: pint found linting issues. run ./vendor/bin/pint to fix."
+  exit 1
+fi
+
+# Security audit via osv-scanner CLI
+if ! command -v osv-scanner > /dev/null 2>&1; then
+  echo "error: osv-scanner not found. install it: https://github.com/google/osv-scanner"
+  exit 1
+fi
+
+echo "running osv-scanner audit..."
+if ! osv-scanner --lockfile=composer.lock; then
+  echo "error: vulnerable packages detected. review the osv-scanner output above."
+  exit 1
+fi
