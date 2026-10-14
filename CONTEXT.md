@@ -94,6 +94,8 @@ Every provider is chosen in `.env`; `.env.example` lists the valid values for ea
 |---|---|
 | `vector` | `embedQuery()`, then `DocChunk::forVersion()` + `selectVectorDistance()` + `whereVectorSimilarTo(minSimilarity: 0.0)`, limit k; similarity = 1 - cosine distance |
 
+- `php artisan docs:search "{query}" {--docs-version=} {--k=} {--mode=} {--content}` (or `make search Q="..."`): ranked results with scores and links, no chat model; warns when the best similarity is under `RAG_MIN_SIMILARITY`. `--docs-version` because `--version` is reserved by Artisan
+- Searches share the embedding throttle with ingestion (one Voyage account), so a search during a card-free ingest waits up to a minute
 - The version filter is in the SQL, never left to the model
 - Embeddings are not selected into results
 - `hnsw.iterative_scan = strict_order` is set per connection. Without it, when the planner uses the HNSW index, the index returns its `ef_search` (40) nearest rows before the version filter, so a 50/50 two-version table returned **0** rows for `ORDER BY distance LIMIT 6` in testing

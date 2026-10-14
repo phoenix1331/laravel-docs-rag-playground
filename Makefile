@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help up down build shell migrate seed tinker ingest horizon-restart test test-pgsql lint lint-test logs fresh
+.PHONY: help up down build shell migrate seed tinker ingest search horizon-restart test test-pgsql lint lint-test logs fresh
 
 EXEC = docker compose exec app
 
@@ -23,6 +23,9 @@ tinker: ## Open tinker in the app container
 
 ingest: ## Ingest a docs version, e.g. make ingest V=13.x ARGS=--fresh
 	@$(EXEC) php artisan docs:ingest $(or $(V),13.x) $(ARGS)
+
+search: ## Search the docs without an LLM, e.g. make search Q="how do job batches work"
+	@$(EXEC) php artisan docs:search "$(Q)" $(ARGS)
 
 horizon-restart: ## Restart the app container so Horizon picks up code and config changes
 	@docker compose restart app
