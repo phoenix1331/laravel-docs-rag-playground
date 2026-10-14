@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Contracts\Embedder;
 use App\Models\DocChunk;
+use App\Models\DocFile;
 use Illuminate\Process\PendingProcess;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Process;
@@ -26,7 +27,7 @@ afterEach(fn () => File::deleteDirectory(storage_path('framework/testing/docs'))
 
 it('ingests every page of a version and reports what it did', function () {
     $this->artisan('docs:ingest', ['version' => '13.x', '--no-pull' => true])
-        ->expectsOutputToContain('Dispatched 2 pages for 13.x')
+        ->expectsOutputToContain('Dispatched 2 of 2 pages for 13.x')
         ->expectsOutputToContain('Ingest complete')
         ->assertSuccessful();
 
@@ -90,4 +91,68 @@ it('rejects unknown versions', function () {
     $this->artisan('docs:ingest', ['version' => '9.x', '--no-pull' => true])
         ->expectsOutputToContain('Unknown version [9.x]')
         ->assertFailed();
+});
+
+describe('unchanged pages', function () {
+    it('records each ingested page with its git blob hash', function () {
+        $this->artisan('docs:ingest', ['version' => '13.x', '--no-pull' => true])->assertSuccessful();
+
+        $page = DocFile::where('file', 'queues.md')->sole();
+        $contents = File::get(config('rag.docs.path').'/13.x/queues.md');
+
+        expect($page->blob_hash)->toBe(sha1('blob '.strlen($contents)."\0".$contents))
+            ->and($page->chunk_count)->toBe(2);
+    });
+
+    it('dispatches nothing when no page has changed', function () {
+        $this->artisan('docs:ingest', ['version' => '13.x', '--no-pull' => true])->assertSuccessful();
+
+        $this->artisan('docs:ingest', ['version' => '13.x', '--no-pull' => true])
+            ->expectsOutputToContain('All 2 pages for 13.x are up to date')
+            ->assertSuccessful();
+    });
+
+    it('dispatches only the pages that changed', function () {
+        $this->artisan('docs:ingest', ['version' => '13.x', '--no-pull' => true])->assertSuccessful();
+
+        writeDocsPage('13.x', 'routing.md', docsPage('Routing', [
+            'basic-routing' => 'Routes are defined in the routes directory using the Route facade and closures.',
+        ]));
+
+        $this->artisan('docs:ingest', ['version' => '13.x', '--no-pull' => true])
+            ->expectsOutputToContain('Dispatched 1 of 2 pages')
+            ->assertSuccessful();
+
+        expect(DocChunk::where('file', 'routing.md')->sole()->content)->toContain('and closures');
+    });
+
+    it('re-processes every page when the chunking settings change', function () {
+        $this->artisan('docs:ingest', ['version' => '13.x', '--no-pull' => true])->assertSuccessful();
+
+        config()->set('rag.chunking.max_tokens', 500);
+
+        $this->artisan('docs:ingest', ['version' => '13.x', '--no-pull' => true])
+            ->expectsOutputToContain('Dispatched 2 of 2 pages')
+            ->assertSuccessful();
+    });
+
+    it('re-processes every page with --all', function () {
+        $this->artisan('docs:ingest', ['version' => '13.x', '--no-pull' => true])->assertSuccessful();
+
+        $this->artisan('docs:ingest', ['version' => '13.x', '--no-pull' => true, '--all' => true])
+            ->expectsOutputToContain('Dispatched 2 of 2 pages')
+            ->assertSuccessful();
+    });
+
+    it('removes the page record when a page is deleted', function () {
+        $this->artisan('docs:ingest', ['version' => '13.x', '--no-pull' => true])->assertSuccessful();
+
+        File::delete(config('rag.docs.path').'/13.x/routing.md');
+
+        $this->artisan('docs:ingest', ['version' => '13.x', '--no-pull' => true])
+            ->expectsOutputToContain('Removed 1 chunks from pages no longer in 13.x')
+            ->assertSuccessful();
+
+        expect(DocFile::pluck('file')->all())->toBe(['queues.md']);
+    });
 });

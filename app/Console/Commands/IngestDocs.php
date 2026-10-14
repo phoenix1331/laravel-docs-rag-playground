@@ -6,9 +6,11 @@ namespace App\Console\Commands;
 
 use App\Contracts\Embedder;
 use App\Docs\DocsRepository;
+use App\Ingestion\DocFileIndexer;
 use App\Ingestion\IngestStats;
 use App\Jobs\IngestDocFile;
 use App\Models\DocChunk;
+use App\Models\DocFile;
 use Illuminate\Bus\Batch;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
@@ -18,12 +20,13 @@ use Illuminate\Support\Facades\Bus;
 #[Signature('docs:ingest
     {version? : Docs branch to ingest, e.g. 13.x (defaults to RAG_DEFAULT_VERSION)}
     {--fresh : Delete every chunk for the version first}
+    {--all : Re-process every page, even ones unchanged since the last ingest}
     {--no-pull : Use the local clone without fetching from GitHub}
     {--no-wait : Dispatch the batch and exit without waiting for it}')]
 #[Description('Chunk, embed and store a version of the Laravel docs')]
 class IngestDocs extends Command
 {
-    public function handle(DocsRepository $docs, Embedder $embedder): int
+    public function handle(DocsRepository $docs, Embedder $embedder, DocFileIndexer $indexer): int
     {
         $version = $this->argument('version') ?? config('rag.docs.default_version');
 
@@ -45,13 +48,27 @@ class IngestDocs extends Command
 
         if ($this->option('fresh')) {
             $deleted = DocChunk::forVersion($version)->delete();
+            DocFile::forVersion($version)->delete();
             $this->components->info("Deleted {$deleted} existing chunks for {$version}.");
         }
 
         $files = $docs->files($version);
-        $batch = $this->dispatchBatch($version, $files);
+        $this->removeDeletedPages($version, $files);
 
-        $this->components->info(sprintf('Dispatched %d pages for %s using %s (batch %s).', count($files), $version, $embedder->model(), $batch->id));
+        $pending = $this->option('all') ? $files : $this->changedPages($docs, $indexer, $version, $files);
+
+        if ($pending === []) {
+            $this->components->info(sprintf('All %d pages for %s are up to date.', count($files), $version));
+
+            return self::SUCCESS;
+        }
+
+        $batch = $this->dispatchBatch($version, $pending);
+
+        $this->components->info(sprintf(
+            'Dispatched %d of %d pages for %s using %s (batch %s).',
+            count($pending), count($files), $version, $embedder->model(), $batch->id,
+        ));
 
         if ($this->option('no-wait')) {
             return self::SUCCESS;
@@ -90,6 +107,41 @@ class IngestDocs extends Command
     }
 
     /**
+     * Pages whose Markdown or chunking signature differs from their last successful ingest.
+     *
+     * @param  list<string>  $files
+     * @return list<string>
+     */
+    protected function changedPages(DocsRepository $docs, DocFileIndexer $indexer, string $version, array $files): array
+    {
+        $ingested = DocFile::forVersion($version)->get(['file', 'blob_hash', 'signature'])->keyBy('file');
+        $signature = $indexer->signature();
+
+        return array_values(array_filter($files, function (string $file) use ($docs, $version, $ingested, $signature) {
+            $last = $ingested->get($file);
+
+            return $last === null
+                || $last->signature !== $signature
+                || $last->blob_hash !== $docs->blobHash($version, $file);
+        }));
+    }
+
+    /**
+     * Drop chunks and file records for pages that no longer exist in this version.
+     *
+     * @param  list<string>  $files
+     */
+    protected function removeDeletedPages(string $version, array $files): void
+    {
+        $chunks = DocChunk::forVersion($version)->whereNotIn('file', $files)->delete();
+        $pages = DocFile::forVersion($version)->whereNotIn('file', $files)->delete();
+
+        if ($chunks > 0 || $pages > 0) {
+            $this->components->info("Removed {$chunks} chunks from pages no longer in {$version}.");
+        }
+    }
+
+    /**
      * @param  list<string>  $files
      */
     protected function dispatchBatch(string $version, array $files): Batch
@@ -97,10 +149,6 @@ class IngestDocs extends Command
         return Bus::batch(array_map(fn (string $file) => new IngestDocFile($version, $file), $files))
             ->name("docs:ingest {$version}")
             ->allowFailures()
-            // Runs only when every page succeeded, so a failed page never has its chunks removed.
-            ->then(function (Batch $batch) use ($version, $files) {
-                IngestStats::add($batch->id, 'deleted', DocChunk::forVersion($version)->whereNotIn('file', $files)->delete());
-            })
             ->dispatch();
     }
 
@@ -134,7 +182,7 @@ class IngestDocs extends Command
         $this->components->twoColumnDetail('Chunks stored for '.$version, (string) DocChunk::forVersion($version)->count());
 
         if ($batch->failedJobs > 0) {
-            $this->components->error("{$batch->failedJobs} pages failed; see failed jobs (php artisan queue:failed). Removed pages were not cleaned up.");
+            $this->components->error("{$batch->failedJobs} pages failed; see failed jobs (php artisan queue:failed). They will be retried on the next ingest.");
 
             return;
         }

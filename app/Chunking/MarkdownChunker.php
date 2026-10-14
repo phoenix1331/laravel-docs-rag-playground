@@ -23,6 +23,11 @@ final class MarkdownChunker
 
     private const string DATA_IMAGE = '/!\[([^\]]*)\]\(data:[^)]*\)/';
 
+    /**
+     * Bump when chunking rules change, so unchanged pages are re-chunked on the next ingest.
+     */
+    public const int RULES_VERSION = 1;
+
     public function __construct(
         private readonly int $maxTokens = 800,
         private readonly int $minTokens = 60,
@@ -43,6 +48,14 @@ final class MarkdownChunker
         }
 
         return $chunks;
+    }
+
+    /**
+     * Identifies the chunking rules and limits; pages chunked under a different signature are re-processed.
+     */
+    public function signature(): string
+    {
+        return implode(':', [self::RULES_VERSION, $this->maxTokens, $this->minTokens]);
     }
 
     /**

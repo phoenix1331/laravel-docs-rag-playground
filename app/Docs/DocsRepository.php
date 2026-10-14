@@ -79,6 +79,19 @@ class DocsRepository
         return File::get($this->directory($version).'/'.basename($file));
     }
 
+    /**
+     * The git blob hash of a page, identical to what "git ls-tree" reports, computed without running git.
+     */
+    public function blobHash(string $version, string $file): string
+    {
+        return self::gitBlobHash($this->contents($version, $file));
+    }
+
+    public static function gitBlobHash(string $contents): string
+    {
+        return sha1('blob '.strlen($contents)."\0".$contents);
+    }
+
     public function exists(string $version): bool
     {
         return File::isDirectory($this->directory($version));

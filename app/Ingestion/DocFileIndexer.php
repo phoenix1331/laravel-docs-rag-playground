@@ -9,6 +9,7 @@ use App\Chunking\MarkdownChunker;
 use App\Contracts\Embedder;
 use App\Docs\DocsRepository;
 use App\Models\DocChunk;
+use App\Models\DocFile;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -23,9 +24,18 @@ class DocFileIndexer
         protected Embedder $embedder,
     ) {}
 
+    /**
+     * Changes whenever the chunker rules, chunk limits or embedding model change.
+     */
+    public function signature(): string
+    {
+        return sha1($this->chunker->signature().'|'.$this->embedder->model());
+    }
+
     public function index(string $version, string $file): IndexResult
     {
-        $chunks = $this->chunker->chunk($this->docs->contents($version, $file));
+        $contents = $this->docs->contents($version, $file);
+        $chunks = $this->chunker->chunk($contents);
         $model = $this->embedder->model();
 
         $existing = DocChunk::forVersion($version)
@@ -58,6 +68,16 @@ class DocFileIndexer
                 DocChunk::forVersion($version)->where('file', $file)->whereIn('anchor', $stale->all())->delete();
             }
         });
+
+        DocFile::updateOrCreate(
+            ['version' => $version, 'file' => $file],
+            [
+                'blob_hash' => DocsRepository::gitBlobHash($contents),
+                'signature' => $this->signature(),
+                'chunk_count' => count($chunks),
+                'ingested_at' => now(),
+            ],
+        );
 
         return new IndexResult(
             embedded: $toEmbed->count(),

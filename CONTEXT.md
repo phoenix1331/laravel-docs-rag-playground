@@ -78,8 +78,10 @@ Every provider is chosen in `.env`; `.env.example` lists the valid values for ea
 | `App\Jobs\IngestDocFile` | Queued, batchable wrapper; releases with backoff (15s up to 300s, 8 tries) on rate limit, overloaded or connection errors; other errors fail |
 | `App\Ingestion\IngestStats` | Per-batch cache counters (`embedded`, `reused`, `unchanged`, `deleted`) for reporting |
 
-- `php artisan docs:ingest {version} {--fresh} {--no-pull} {--no-wait}`: syncs the clone, dispatches one `IngestDocFile` per page in a `Bus::batch` (`allowFailures`), shows progress, prints totals
-- The batch `then` callback deletes chunks for pages no longer in the version; it only runs when every page succeeded, so a failed page is never wiped
+- `php artisan docs:ingest {version} {--fresh} {--all} {--no-pull} {--no-wait}`: syncs the clone, removes pages no longer in the version, dispatches an `IngestDocFile` per **changed** page in a `Bus::batch` (`allowFailures`), shows progress, prints totals
+- Two levels of change detection: `doc_files` skips whole pages whose git blob hash (`sha1("blob {size}\0{content}")`, identical to `git ls-tree`) and signature are unchanged; within a page, chunk hashes decide what is re-embedded
+- Signature = `MarkdownChunker::RULES_VERSION` + chunk limits + embedding model; bump `RULES_VERSION` when chunking rules change so unchanged pages are re-chunked. `--all` forces every page
+- A page is recorded in `doc_files` only after it indexes successfully, so failed pages are retried on the next run
 - Refuses to run when stored chunks for the version use another `embedding_model`, unless `--fresh`
 - Identical content under a new anchor reuses the stored vector (`reused`), so section moves cost nothing
 - Upserts go through `DB::table()` with the vector as a JSON array literal, which pgvector parses directly
@@ -96,6 +98,8 @@ Every provider is chosen in `.env`; `.env.example` lists the valid values for ea
 | `hash` | sha256 of content; indexed with `version`, `file` for incremental re-ingest |
 | `embedding_model` | Model that produced the vector |
 | `embedding` | `vector(RAG_EMBEDDING_DIMENSIONS)` with HNSW `vector_cosine_ops` index on Postgres; JSON on SQLite |
+
+`doc_files`: last successful ingest per page (`version`, `file` unique; `blob_hash`, `signature`, `chunk_count`, `ingested_at`).
 
 ## Testing
 
