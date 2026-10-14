@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Providers;
 
+use App\Answering\DocsAssistant;
 use App\Chunking\MarkdownChunker;
 use App\Contracts\Embedder;
 use App\Docs\DocsRepository;
@@ -56,6 +57,13 @@ class AppServiceProvider extends ServiceProvider
             $app->make(Embedder::class),
             config('rag.retrieval.mode'),
             config('rag.retrieval.top_k'),
+        ));
+
+        $this->app->bind(DocsAssistant::class, fn ($app) => new DocsAssistant(
+            $app->make(Retriever::class),
+            config('rag.chat'),
+            config('rag.retrieval.min_similarity'),
+            config('rag.docs.default_version'),
         ));
 
         $this->app->bind(DocsRepository::class, fn () => new DocsRepository(

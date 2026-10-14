@@ -46,6 +46,10 @@ return [
         'provider' => env('RAG_CHAT_PROVIDER', 'anthropic'),
         'model' => env('RAG_CHAT_MODEL') ?: null,
         'max_tokens' => (int) env('RAG_CHAT_MAX_TOKENS', 4096),
+
+        // Optional second provider the SDK fails over to when the first is rate limited or down.
+        'fallback_provider' => env('RAG_CHAT_FALLBACK_PROVIDER') ?: null,
+        'fallback_model' => env('RAG_CHAT_FALLBACK_MODEL') ?: null,
     ],
 
     /*
