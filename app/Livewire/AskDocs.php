@@ -38,6 +38,11 @@ class AskDocs extends Component
 
     public ?string $status = null;
 
+    /**
+     * True between submitting a question and the answer finishing.
+     */
+    public bool $streaming = false;
+
     public string $answerHtml = '';
 
     /**
@@ -82,17 +87,34 @@ class AskDocs extends Component
             'question.min' => 'Ask a slightly longer question.',
         ]);
 
+        $this->resetAnswer();
+        $this->asked = trim($this->question);
+        $this->streaming = true;
+
+        // Render the question straight away, then stream the answer in a second request.
+        $this->js('$wire.generate()');
+    }
+
+    public function generate(DocsAssistant $assistant): void
+    {
+        if (! $this->streaming || $this->asked === '') {
+            return;
+        }
+
         // Free-tier models can take longer than PHP's default 30 seconds.
         set_time_limit(120);
 
-        $this->resetAnswer();
-        $this->asked = trim($this->question);
-
         try {
-            $this->show($assistant->answer($this->asked, $this->version));
+            $this->show($assistant->answer(
+                $this->asked,
+                $this->version,
+                fn (string $delta) => $this->stream(to: 'answer', content: $delta),
+            ));
         } catch (Throwable $exception) {
             Log::warning('Answering failed', ['question' => $this->asked, 'exception' => $exception]);
             $this->error = $this->describe($exception);
+        } finally {
+            $this->streaming = false;
         }
     }
 
@@ -117,7 +139,7 @@ class AskDocs extends Component
 
     protected function resetAnswer(): void
     {
-        $this->reset('asked', 'status', 'answerHtml', 'sources', 'meta', 'error');
+        $this->reset('asked', 'status', 'streaming', 'answerHtml', 'sources', 'meta', 'error');
     }
 
     /**

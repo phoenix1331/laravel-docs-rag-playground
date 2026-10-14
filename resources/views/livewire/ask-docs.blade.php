@@ -30,10 +30,10 @@
                     type="submit"
                     class="rounded-md bg-ink px-5 py-3 text-sm font-semibold text-paper hover:opacity-90 disabled:opacity-50"
                     wire:loading.attr="disabled"
-                    wire:target="ask"
+                    wire:target="ask, generate"
                 >
-                    <span wire:loading.remove wire:target="ask">Ask</span>
-                    <span wire:loading wire:target="ask">Answering</span>
+                    <span wire:loading.remove wire:target="ask, generate">Ask</span>
+                    <span wire:loading wire:target="ask, generate">Answering</span>
                 </button>
             </div>
 
@@ -50,9 +50,15 @@
             <article class="mt-10" aria-live="polite">
                 <p class="text-sm text-muted">{{ $asked }}</p>
 
-                <div @class(['answer mt-3', 'text-muted' => $status === 'not_covered'])>
-                    {!! $answerHtml !!}
-                </div>
+                @if ($streaming)
+                    {{-- Raw text while it streams; replaced by rendered Markdown once complete. --}}
+                    <div class="answer mt-3 whitespace-pre-wrap" wire:stream="answer"></div>
+                    <p class="mt-3 text-sm text-muted" wire:loading wire:target="generate">Searching the docs and writing an answer.</p>
+                @else
+                    <div @class(['answer mt-3', 'text-muted' => $status === 'not_covered'])>
+                        {!! $answerHtml !!}
+                    </div>
+                @endif
 
                 @if ($sources)
                     <section class="mt-8 max-w-prose border-t border-rule pt-5" aria-labelledby="sources-heading">

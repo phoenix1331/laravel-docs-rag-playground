@@ -40,7 +40,7 @@ Every provider is chosen in `.env`; `.env.example` lists the valid values for ea
 - `fake` embeddings: `FakeEmbedder` (word hashing), offline, no key. `fake` answers: offline templated answer from the top sections
 - Embedding goes through `App\Contracts\Embedder` (`embedDocuments()`, `embedQuery()`); `AiSdkEmbedder` wraps `Laravel\Ai\Embeddings`, batches by `RAG_EMBEDDING_BATCH_SIZE`, checks counts and dimensions, and sends Voyage `input_type` document/query
 - `ollama` runs on the host; the container reaches it at `host.docker.internal:11434` (`extra_hosts` in `docker-compose.yml`)
-- Rate limits: `RAG_EMBEDDING_BATCH_TOKENS` caps each request by estimated tokens; `RAG_EMBEDDING_RPM` / `RAG_EMBEDDING_TPM` drive `App\Services\Embeddings\EmbeddingThrottle`, which reserves evenly spaced slots in the cache (shared across workers, no window-edge bursts). 0 disables. Local `.env`: 8000 / 3 / 9000 with 1 worker. Voyage counts about 16% fewer tokens than the chars/4 estimate
+- Rate limits: `RAG_EMBEDDING_BATCH_TOKENS` caps each request by estimated tokens; `RAG_EMBEDDING_RPM` / `RAG_EMBEDDING_TPM` drive `App\Services\Embeddings\EmbeddingThrottle`, which reserves evenly spaced slots in the cache (shared across workers, no window-edge bursts). 0 disables. Local `.env`: 8000 / 2 / 9000 with 1 worker (RPM one under Voyage's 3 so questions still get through during an ingest). Voyage counts about 16% fewer tokens than the chars/4 estimate
 - Free tiers are busy: `gemini-3.8-flash` often returns overloaded errors, `gemini-3.1-flash-lite` is more reliable
 - Claude Pro does not include API credit; the Anthropic API is billed separately via console.anthropic.com
 
@@ -134,6 +134,7 @@ Single page at `/` (`App\Livewire\AskDocs`, layout `resources/views/layouts/app.
 
 - Dark mode via `prefers-color-scheme`, same roles redefined
 - Type: Source Serif 4 for the answer (reads as documentation), Public Sans for the tool, JetBrains Mono for code and scores
+- Two-step submit: `ask()` validates and renders the question, then `$this->js('$wire.generate()')`; `generate()` streams deltas with `$this->stream(to: 'answer')` into a `wire:stream` element (raw text), then swaps in the rendered answer. Verified live: 26 progressive DOM updates, first text about 3s after submit. `wire:stream` works because FrankenPHP runs in classic (`php-server`) mode, not worker/Octane mode
 - Answers render through `App\Answering\AnswerHtml` (CommonMark, HTML escaped, unsafe links off); `[n]` outside code becomes a chip linking to `#source-n`
 - Ligatures are off for code so PHP's `->` and `=>` are not drawn as arrows
 - Header links to Horizon when `Horizon::check()` allows it (local by default)

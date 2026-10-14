@@ -33,6 +33,11 @@ it('answers a question with citation chips and sources', function () {
     Livewire::test(AskDocs::class)
         ->set('question', 'How do I batch jobs?')
         ->call('ask')
+        ->assertSet('streaming', true)
+        ->assertSet('asked', 'How do I batch jobs?')
+        ->assertSeeHtml('wire:stream="answer"')
+        ->call('generate')
+        ->assertSet('streaming', false)
         ->assertSet('status', 'answered')
         ->assertSee('How do I batch jobs?')
         ->assertSeeHtml('<code>Bus::batch()</code>')
@@ -68,6 +73,7 @@ it('explains when the docs do not cover a question', function () {
     Livewire::test(AskDocs::class)
         ->set('question', 'How do I deploy to Mars?')
         ->call('ask')
+        ->call('generate')
         ->assertSet('status', 'not_covered')
         ->assertSee('appear to be covered in the Laravel 13.x documentation')
         ->assertSee('no model was called');
@@ -80,6 +86,16 @@ it('shows what to do when the provider is overloaded', function () {
     Livewire::test(AskDocs::class)
         ->set('question', 'How do I batch jobs?')
         ->call('ask')
+        ->call('generate')
+        ->assertSet('streaming', false)
         ->assertSet('status', null)
         ->assertSee('overloaded right now');
+});
+
+it('does nothing when generate is called without a pending question', function () {
+    DocsAgent::fake()->preventStrayPrompts();
+
+    Livewire::test(AskDocs::class)->call('generate')->assertSet('status', null);
+
+    DocsAgent::assertNeverPrompted();
 });
