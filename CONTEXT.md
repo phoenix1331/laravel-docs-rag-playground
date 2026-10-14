@@ -43,6 +43,23 @@ Every provider is chosen in `.env`; `.env.example` lists the valid values for ea
 - Free tiers are busy: `gemini-3.8-flash` often returns overloaded errors, `gemini-3.1-flash-lite` is more reliable
 - Claude Pro does not include API credit; the Anthropic API is billed separately via console.anthropic.com
 
+## Chunking
+
+`App\Chunking\MarkdownChunker` (framework-free) turns one docs page into `App\Chunking\Chunk` value objects.
+
+| Rule | Detail |
+|---|---|
+| Split points | `##` and `###` headings outside fenced code; `####` stays in content |
+| Anchor | Explicit `<a name="...">` above the heading (often differs from the heading text), slug fallback, de-duplicated per file |
+| Skipped | `#` title (used as heading path root), table of contents, `<a name>` and wrapper `<div>` lines, lines made only of in-page `#links` |
+| Cleaned | Base64 `data:` images replaced with `[Image: alt]` |
+| Oversized | Packed by paragraph (code block = one paragraph); tables over budget split by rows with header repeated; parts get `-part-N` anchors but share `sectionAnchor` for the URL |
+| Short | Under `RAG_CHUNK_MIN_TOKENS`: merged into the previous section, else absorbs the next, only within the same `##` parent and only if within the max |
+| Content | Starts with the heading line; `embeddingText()` prefixes the heading path; `hash` is sha256 of `embeddingText()` |
+| Tokens | Estimated as characters / 4 |
+
+13.x baseline (800 max, 60 min): 2216 chunks, ~800K tokens, median 297, none over the max.
+
 ## Data model
 
 `doc_chunks`: one row per docs section (or part of an oversized section).
