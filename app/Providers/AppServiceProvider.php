@@ -7,6 +7,7 @@ namespace App\Providers;
 use App\Chunking\MarkdownChunker;
 use App\Contracts\Embedder;
 use App\Docs\DocsRepository;
+use App\Retrieval\Retriever;
 use App\Services\Embeddings\AiSdkEmbedder;
 use App\Services\Embeddings\EmbeddingThrottle;
 use App\Services\Embeddings\FakeEmbedder;
@@ -49,6 +50,12 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(MarkdownChunker::class, fn () => new MarkdownChunker(
             config('rag.chunking.max_tokens'),
             config('rag.chunking.min_tokens'),
+        ));
+
+        $this->app->bind(Retriever::class, fn ($app) => new Retriever(
+            $app->make(Embedder::class),
+            config('rag.retrieval.mode'),
+            config('rag.retrieval.top_k'),
         ));
 
         $this->app->bind(DocsRepository::class, fn () => new DocsRepository(

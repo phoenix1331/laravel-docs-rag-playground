@@ -86,6 +86,19 @@ Every provider is chosen in `.env`; `.env.example` lists the valid values for ea
 - Identical content under a new anchor reuses the stored vector (`reused`), so section moves cost nothing
 - Upserts go through `DB::table()` with the vector as a JSON array literal, which pgvector parses directly
 
+## Retrieval
+
+`App\Retrieval\Retriever::retrieve($query, $version, $mode, $topK)` returns a `RetrievalResult` of `RetrievedChunk`s (chunk, rank, score, similarity).
+
+| Mode | How |
+|---|---|
+| `vector` | `embedQuery()`, then `DocChunk::forVersion()` + `selectVectorDistance()` + `whereVectorSimilarTo(minSimilarity: 0.0)`, limit k; similarity = 1 - cosine distance |
+
+- The version filter is in the SQL, never left to the model
+- Embeddings are not selected into results
+- `hnsw.iterative_scan = strict_order` is set per connection. Without it, when the planner uses the HNSW index, the index returns its `ef_search` (40) nearest rows before the version filter, so a 50/50 two-version table returned **0** rows for `ORDER BY distance LIMIT 6` in testing
+- At this size the planner prefers an exact scan + sort, because the `whereVectorSimilarTo` distance condition makes HNSW look costlier; results are exact and take milliseconds. The iterative scan setting protects the HNSW path as the table grows
+
 ## Data model
 
 `doc_chunks`: one row per docs section (or part of an oversized section).
@@ -117,6 +130,7 @@ Migrations check the driver and skip pgvector-only columns/indexes on SQLite. `t
 | `Dockerfile` | FrankenPHP image with pgsql/redis/pcntl extensions, Composer, Node 24, `git`; runs as UID 1000 |
 | `docker-compose.yml` | `app`, `pgsql`, `redis` with healthchecks |
 | `docker/pgsql/init.sql` | Creates `laravel_testing` and enables the `vector` extension in both databases |
+| `app/Retrieval/` | `Retriever`, `RetrievalResult`, `RetrievedChunk` |
 | `app/Contracts/Embedder.php`, `app/Services/Embeddings/` | Embedding contract, AI SDK implementation, deterministic fake |
 | `config/rag.php` | Embedding/chat provider and model, chunk limits, top k, similarity threshold, retrieval mode, docs source |
 | `Makefile` | All developer commands; `make help` lists them (`make ingest V=13.x`, `make horizon-restart` after code changes) |
