@@ -10,17 +10,17 @@ return [
     |--------------------------------------------------------------------------
     |
     | The provider and model that turn docs sections and questions into
-    | vectors. Any provider in config/ai.php with embedding support works,
-    | e.g. "voyageai" (voyage-4, 1024) or "openai" (text-embedding-3-small,
-    | 1536). Changing the model or dimensions means re-running the
-    | migrations and "docs:ingest --fresh", as vectors are not comparable
-    | across models.
+    | vectors. Any embedding provider in config/ai.php works, plus "fake"
+    | for offline use. A null model uses the provider's default. Dimensions
+    | size the vector column and must be 2000 or less for the HNSW index.
+    | Changing any of these means re-running the migrations and
+    | "docs:ingest --fresh", as vectors are not comparable across models.
     |
     */
 
     'embedding' => [
         'provider' => env('RAG_EMBEDDING_PROVIDER', 'voyageai'),
-        'model' => env('RAG_EMBEDDING_MODEL', 'voyage-4'),
+        'model' => env('RAG_EMBEDDING_MODEL') ?: null,
         'dimensions' => (int) env('RAG_EMBEDDING_DIMENSIONS', 1024),
         'batch_size' => (int) env('RAG_EMBEDDING_BATCH_SIZE', 64),
     ],
@@ -31,13 +31,14 @@ return [
     |--------------------------------------------------------------------------
     |
     | The provider and model that write grounded answers from the retrieved
-    | sections, e.g. "anthropic" (claude-opus-5-5) or "openai".
+    | sections. Any text provider in config/ai.php works, plus "fake" for an
+    | offline templated answer. A null model uses the provider's default.
     |
     */
 
     'chat' => [
         'provider' => env('RAG_CHAT_PROVIDER', 'anthropic'),
-        'model' => env('RAG_CHAT_MODEL', 'claude-opus-5-5'),
+        'model' => env('RAG_CHAT_MODEL') ?: null,
         'max_tokens' => (int) env('RAG_CHAT_MAX_TOKENS', 4096),
     ],
 

@@ -27,16 +27,21 @@ Inside the network the app reaches `pgsql:5432` and `redis:6379`.
 
 ## AI providers
 
-| Role | Default | Alternative | Config |
-|---|---|---|---|
-| Embeddings | Voyage AI `voyage-4`, 1024 dims | OpenAI `text-embedding-3-small`, 1536 dims | `RAG_EMBEDDING_PROVIDER`, `RAG_EMBEDDING_MODEL`, `RAG_EMBEDDING_DIMENSIONS` |
-| Answers | Anthropic `claude-opus-5-5` | OpenAI chat model | `RAG_CHAT_PROVIDER`, `RAG_CHAT_MODEL` |
+Every provider is chosen in `.env`; `.env.example` lists the valid values for each key.
 
-- Switching is `.env` only; any embedding-capable provider in `config/ai.php` works
-- `RAG_EMBEDDING_PROVIDER=fake` uses the offline `FakeEmbedder` (word-hashing vectors) for local runs without an API key
+| Role | Providers | Default | Free options |
+|---|---|---|---|
+| Embeddings | `voyageai`, `openai`, `gemini`, `mistral`, `cohere`, `jina`, `ollama`, `openrouter`, `fake` | `voyageai` (`voyage-4`, 1024 dims) | Voyage free tokens, `ollama`, `fake` |
+| Answers | `anthropic`, `openai`, `gemini`, `groq`, `mistral`, `deepseek`, `xai`, `openrouter`, `ollama`, `fake` | `anthropic` | `gemini` and `groq` free tiers, `ollama`, `fake` |
+
+- `RAG_*_MODEL` empty means the provider's SDK default (resolved via `Laravel\Ai\Ai::embeddingProvider()->defaultEmbeddingsModel()`), so switching provider alone is enough
+- `RAG_EMBEDDING_DIMENSIONS` sizes the vector column; the migration rejects values over 2000 (pgvector HNSW limit), so models like `gemini-embedding-2` (3072 native) must use a smaller output dimension
+- Changing embedding provider, model or dimensions needs `make fresh` then a fresh ingest: vectors are not comparable across models
+- `fake` embeddings: `FakeEmbedder` (word hashing), offline, no key. `fake` answers: offline templated answer from the top sections
 - Embedding goes through `App\Contracts\Embedder` (`embedDocuments()`, `embedQuery()`); `AiSdkEmbedder` wraps `Laravel\Ai\Embeddings`, batches by `RAG_EMBEDDING_BATCH_SIZE`, checks counts and dimensions, and sends Voyage `input_type` document/query
-- Changing embedding model or dimensions needs `make fresh` then a fresh ingest: the vector column is sized from config and vectors from different models are not comparable
-- `config/ai.php` defaults follow the same `RAG_*_PROVIDER` env keys; `config/rag.php` holds model, chunking, retrieval and docs-source settings
+- `ollama` runs on the host; the container reaches it at `host.docker.internal:11434` (`extra_hosts` in `docker-compose.yml`)
+- Free tiers are busy: `gemini-3.8-flash` often returns overloaded errors, `gemini-3.1-flash-lite` is more reliable
+- Claude Pro does not include API credit; the Anthropic API is billed separately via console.anthropic.com
 
 ## Data model
 

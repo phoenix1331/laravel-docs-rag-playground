@@ -14,12 +14,17 @@ return new class extends Migration
     public function up(): void
     {
         $usesPgvector = Schema::getConnection()->getDriverName() === 'pgsql';
+        $dimensions = config('rag.embedding.dimensions');
+
+        if ($dimensions > 2000) {
+            throw new InvalidArgumentException("RAG_EMBEDDING_DIMENSIONS is {$dimensions}; pgvector HNSW indexes support at most 2000. Choose a smaller output dimension for the model.");
+        }
 
         if ($usesPgvector) {
             Schema::ensureVectorExtensionExists();
         }
 
-        Schema::create('doc_chunks', function (Blueprint $table) use ($usesPgvector) {
+        Schema::create('doc_chunks', function (Blueprint $table) use ($usesPgvector, $dimensions) {
             $table->id();
             $table->string('version')->index();
             $table->string('file');
@@ -43,7 +48,7 @@ return new class extends Migration
                 return;
             }
 
-            $table->vector('embedding', dimensions: config('rag.embedding.dimensions'))->index();
+            $table->vector('embedding', dimensions: $dimensions)->index();
         });
     }
 

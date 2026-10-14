@@ -9,6 +9,7 @@ use App\Services\Embeddings\AiSdkEmbedder;
 use App\Services\Embeddings\FakeEmbedder;
 use Illuminate\Foundation\DevCommands;
 use Illuminate\Support\ServiceProvider;
+use Laravel\Ai\Ai;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -24,7 +25,9 @@ class AppServiceProvider extends ServiceProvider
                 return new FakeEmbedder($config['dimensions']);
             }
 
-            return new AiSdkEmbedder($config['provider'], $config['model'], $config['dimensions'], $config['batch_size']);
+            $model = $config['model'] ?? Ai::embeddingProvider($config['provider'])->defaultEmbeddingsModel();
+
+            return new AiSdkEmbedder($config['provider'], $model, $config['dimensions'], $config['batch_size']);
         });
     }
 

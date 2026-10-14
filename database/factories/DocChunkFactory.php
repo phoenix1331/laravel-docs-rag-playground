@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
+use App\Contracts\Embedder;
 use App\Models\DocChunk;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
@@ -36,7 +37,7 @@ class DocChunkFactory extends Factory
             'content' => $content,
             'token_count' => (int) ceil(strlen($content) / 4),
             'hash' => hash('sha256', $content),
-            'embedding_model' => config('rag.embedding.model'),
+            'embedding_model' => app(Embedder::class)->model(),
             'embedding' => $this->randomUnitVector(config('rag.embedding.dimensions')),
         ];
     }
