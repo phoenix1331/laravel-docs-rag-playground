@@ -36,6 +36,28 @@ Inside the network the app reaches `pgsql:5432` and `redis:6379`.
 - Changing embedding model or dimensions needs `make fresh` then a fresh ingest: the vector column is sized from config and vectors from different models are not comparable
 - `config/ai.php` defaults follow the same `RAG_*_PROVIDER` env keys; `config/rag.php` holds model, chunking, retrieval and docs-source settings
 
+## Data model
+
+`doc_chunks`: one row per docs section (or part of an oversized section).
+
+| Column | Notes |
+|---|---|
+| `version`, `file`, `anchor` | Unique together; `version` indexed for filtering |
+| `heading`, `heading_path`, `url` | Display and citation; `url` links to the laravel.com section |
+| `content`, `token_count` | Section text and approximate size |
+| `hash` | sha256 of content; indexed with `version`, `file` for incremental re-ingest |
+| `embedding_model` | Model that produced the vector |
+| `embedding` | `vector(RAG_EMBEDDING_DIMENSIONS)` with HNSW `vector_cosine_ops` index on Postgres; JSON on SQLite |
+
+## Testing
+
+| Suite | Database | Run |
+|---|---|---|
+| `tests/Unit`, `tests/Feature` | SQLite in memory | `make test` |
+| `tests/Pgsql` (group `pgsql`) | Postgres `laravel_testing` | `make test-pgsql`; skipped under `make test` |
+
+Migrations check the driver and skip pgvector-only columns/indexes on SQLite.
+
 ## Key files
 
 | Path | Purpose |
