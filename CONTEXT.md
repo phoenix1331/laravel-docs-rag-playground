@@ -31,6 +31,7 @@ Inside the network the app reaches `pgsql:5432` and `redis:6379`.
 | `Dockerfile` | FrankenPHP image with pgsql/redis/pcntl extensions, Composer, Node 24, `git`; runs as UID 1000 |
 | `docker-compose.yml` | `app`, `pgsql`, `redis` with healthchecks |
 | `docker/pgsql/init.sql` | Creates `laravel_testing` and enables the `vector` extension in both databases |
+| `Makefile` | All developer commands; `make help` lists them |
 | `app/Providers/AppServiceProvider.php` | Swaps the default `artisan serve` dev command for `frankenphp php-server` |
 
 ## Decisions
