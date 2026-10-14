@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 use App\Contracts\Embedder;
 use App\Services\Embeddings\AiSdkEmbedder;
+use App\Services\Embeddings\EmbeddingThrottle;
+use Illuminate\Support\Sleep;
 use Laravel\Ai\Embeddings;
+use Laravel\Ai\Exceptions\RateLimitedException;
 use Laravel\Ai\Prompts\EmbeddingsPrompt;
 
 it('binds the fake embedder in tests', function () {
@@ -62,4 +65,33 @@ it('sends an oversized text on its own rather than dropping it', function () {
     $embedder = new AiSdkEmbedder('voyageai', 'voyage-4', 4, batchTokens: 10);
 
     expect(array_map('count', $embedder->batches([str_repeat('a', 400), 'b'])))->toBe([1, 1]);
+});
+
+it('does not make queries wait for the ingest throttle', function () {
+    Embeddings::fake();
+    Sleep::fake();
+    $throttle = new EmbeddingThrottle(cache()->store(), requestsPerMinute: 1);
+    $embedder = new AiSdkEmbedder('voyageai', 'voyage-4', 8, throttle: $throttle);
+
+    $embedder->embedDocuments(['Queues']);
+    $embedder->embedQuery('How do queues work?');
+    $embedder->embedQuery('And batches?');
+
+    Sleep::assertNeverSlept();
+});
+
+it('retries a rate limited query briefly', function () {
+    Sleep::fake();
+    $calls = 0;
+    Embeddings::fake(function (EmbeddingsPrompt $prompt) use (&$calls) {
+        if (++$calls === 1) {
+            throw RateLimitedException::forProvider('voyageai');
+        }
+
+        return [array_fill(0, 8, 0.1)];
+    });
+
+    expect((new AiSdkEmbedder('voyageai', 'voyage-4', 8))->embedQuery('Routing'))->toHaveCount(8)
+        ->and($calls)->toBe(2);
+    Sleep::assertSleptTimes(1);
 });

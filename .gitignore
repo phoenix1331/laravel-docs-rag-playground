@@ -27,3 +27,4 @@ Homestead.yaml
 Thumbs.db
 /storage/app/docs
 .claude/
+/.playwright-mcp

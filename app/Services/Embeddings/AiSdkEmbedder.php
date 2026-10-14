@@ -6,7 +6,9 @@ namespace App\Services\Embeddings;
 
 use App\Chunking\MarkdownChunker;
 use App\Contracts\Embedder;
+use Illuminate\Support\Sleep;
 use Laravel\Ai\Embeddings;
+use Laravel\Ai\Exceptions\RateLimitedException;
 use Laravel\Ai\Providers\Provider;
 use UnexpectedValueException;
 
@@ -66,9 +68,21 @@ class AiSdkEmbedder implements Embedder
         return $batches;
     }
 
+    /**
+     * Queries skip the throttle so a question never queues behind a background ingest; the throttle
+     * leaves spare requests for them. A rate limit is retried briefly instead.
+     */
     public function embedQuery(string $text): array
     {
-        return $this->generate([$text], 'query')[0];
+        foreach ([3, 8] as $delay) {
+            try {
+                return $this->generate([$text], 'query', throttled: false)[0];
+            } catch (RateLimitedException) {
+                Sleep::for($delay)->seconds();
+            }
+        }
+
+        return $this->generate([$text], 'query', throttled: false)[0];
     }
 
     public function model(): string
@@ -87,9 +101,11 @@ class AiSdkEmbedder implements Embedder
      * @param  list<string>  $inputs
      * @return list<list<float>>
      */
-    protected function generate(array $inputs, string $inputType): array
+    protected function generate(array $inputs, string $inputType, bool $throttled = true): array
     {
-        $this->throttle?->wait(array_sum(array_map(MarkdownChunker::estimateTokens(...), $inputs)));
+        if ($throttled) {
+            $this->throttle?->wait(array_sum(array_map(MarkdownChunker::estimateTokens(...), $inputs)));
+        }
 
         $embeddings = Embeddings::for($inputs)
             ->dimensions($this->dimensions)

@@ -45,6 +45,11 @@
         -webkit-font-smoothing: antialiased;
     }
 
+    /* Ligatures would show PHP's -> and => as arrows, which misleads in code. */
+    code, pre, kbd, .font-mono {
+        font-variant-ligatures: none;
+    }
+
     :focus-visible {
         outline: 2px solid var(--color-cite);
         outline-offset: 2px;

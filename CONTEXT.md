@@ -95,7 +95,7 @@ Every provider is chosen in `.env`; `.env.example` lists the valid values for ea
 | `vector` | `embedQuery()`, then `DocChunk::forVersion()` + `selectVectorDistance()` + `whereVectorSimilarTo(minSimilarity: 0.0)`, limit k; similarity = 1 - cosine distance |
 
 - `php artisan docs:search "{query}" {--docs-version=} {--k=} {--mode=} {--content}` (or `make search Q="..."`): ranked results with scores and links, no chat model; warns when the best similarity is under `RAG_MIN_SIMILARITY`. `--docs-version` because `--version` is reserved by Artisan
-- Searches share the embedding throttle with ingestion (one Voyage account), so a search during a card-free ingest waits up to a minute
+- Question embeddings skip the throttle (retrying briefly on 429) so a question never queues behind an ingest; card-free ingestion is token-bound at about 1 request a minute, leaving spare requests
 - The version filter is in the SQL, never left to the model
 - Embeddings are not selected into results
 - `hnsw.iterative_scan = strict_order` is set per connection. Without it, when the planner uses the HNSW index, the index returns its `ef_search` (40) nearest rows before the version filter, so a 50/50 two-version table returned **0** rows for `ORDER BY distance LIMIT 6` in testing
@@ -134,6 +134,8 @@ Single page at `/` (`App\Livewire\AskDocs`, layout `resources/views/layouts/app.
 
 - Dark mode via `prefers-color-scheme`, same roles redefined
 - Type: Source Serif 4 for the answer (reads as documentation), Public Sans for the tool, JetBrains Mono for code and scores
+- Answers render through `App\Answering\AnswerHtml` (CommonMark, HTML escaped, unsafe links off); `[n]` outside code becomes a chip linking to `#source-n`
+- Ligatures are off for code so PHP's `->` and `=>` are not drawn as arrows
 - Header links to Horizon when `Horizon::check()` allows it (local by default)
 
 ## Data model
