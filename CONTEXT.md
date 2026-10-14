@@ -11,6 +11,7 @@ Laravel 13 playground that answers questions about the Laravel documentation usi
 | Database | PostgreSQL 17 with pgvector (`pgvector/pgvector:pg17`) |
 | Queue / cache | Redis 8 |
 | Tests | Pest, SQLite in memory by default |
+| AI | Laravel AI SDK (`laravel/ai`) |
 | Front end | Vite + Tailwind (Livewire to follow) |
 
 ## Services and ports
@@ -24,6 +25,17 @@ Laravel 13 playground that answers questions about the Laravel documentation usi
 
 Inside the network the app reaches `pgsql:5432` and `redis:6379`.
 
+## AI providers
+
+| Role | Default | Alternative | Config |
+|---|---|---|---|
+| Embeddings | Voyage AI `voyage-4`, 1024 dims | OpenAI `text-embedding-3-small`, 1536 dims | `RAG_EMBEDDING_PROVIDER`, `RAG_EMBEDDING_MODEL`, `RAG_EMBEDDING_DIMENSIONS` |
+| Answers | Anthropic `claude-opus-5-5` | OpenAI chat model | `RAG_CHAT_PROVIDER`, `RAG_CHAT_MODEL` |
+
+- Switching is `.env` only; any embedding-capable provider in `config/ai.php` works
+- Changing embedding model or dimensions needs `make fresh` then a fresh ingest: the vector column is sized from config and vectors from different models are not comparable
+- `config/ai.php` defaults follow the same `RAG_*_PROVIDER` env keys; `config/rag.php` holds model, chunking, retrieval and docs-source settings
+
 ## Key files
 
 | Path | Purpose |
@@ -31,6 +43,7 @@ Inside the network the app reaches `pgsql:5432` and `redis:6379`.
 | `Dockerfile` | FrankenPHP image with pgsql/redis/pcntl extensions, Composer, Node 24, `git`; runs as UID 1000 |
 | `docker-compose.yml` | `app`, `pgsql`, `redis` with healthchecks |
 | `docker/pgsql/init.sql` | Creates `laravel_testing` and enables the `vector` extension in both databases |
+| `config/rag.php` | Embedding/chat provider and model, chunk limits, top k, similarity threshold, retrieval mode, docs source |
 | `Makefile` | All developer commands; `make help` lists them |
 | `pint.json` | Laravel preset plus `declare_strict_types` on every PHP file |
 | `.husky/` | `commit-msg` (lowercase conventional commits, no scopes) and `pre-commit` (Pint, osv-scanner on `composer.lock`); hook bodies are POSIX `sh` |
