@@ -12,7 +12,7 @@ Laravel 13 playground that answers questions about the Laravel documentation usi
 | Queue / cache | Redis 8, Horizon |
 | Tests | Pest, SQLite in memory by default |
 | AI | Laravel AI SDK (`laravel/ai`) |
-| Front end | Vite + Tailwind (Livewire to follow) |
+| Front end | Livewire 4 (class-based `app/Livewire`), Tailwind v4, Vite; fonts via `bunny()` in `vite.config.js` |
 
 ## Services and ports
 
@@ -119,6 +119,22 @@ Every provider is chosen in `.env`; `.env.example` lists the valid values for ea
 - Refusal has two layers: the similarity threshold (cheap, catches clear misses) and the model's `NOT_COVERED` (catches off-topic sections above the threshold). Live 13.x: a Kubernetes question scored 0.291 (refused at 0.30, narrowly); an off-topic Blade section scored 0.362 for a validation question. Tune with the eval set
 - `php artisan docs:ask "{question}" {--docs-version=} {--no-stream} {--context}` (or `make ask Q="..."`): streams the answer, lists cited sources with URLs, `--context` shows every retrieved section with similarity and cited flag, footer shows provider, model and tokens or why no model was called
 - Live check (Gemini `gemini-3.1-flash-lite`): policy authorisation question answered with 4 citations, ~2.9K tokens in / 340 out
+
+## UI
+
+Single page at `/` (`App\Livewire\AskDocs`, layout `resources/views/layouts/app.blade.php`).
+
+| Design token (`resources/css/app.css`) | Role |
+|---|---|
+| `paper`, `surface` | Backgrounds |
+| `ink`, `muted` | Text |
+| `rule` | Hairlines |
+| `cite`, `cite-soft` | Sections the answer cited, citation chips |
+| `threshold` | The refusal cut-off only |
+
+- Dark mode via `prefers-color-scheme`, same roles redefined
+- Type: Source Serif 4 for the answer (reads as documentation), Public Sans for the tool, JetBrains Mono for code and scores
+- Header links to Horizon when `Horizon::check()` allows it (local by default)
 
 ## Data model
 

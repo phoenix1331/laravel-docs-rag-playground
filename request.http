@@ -1,0 +1,16 @@
+@baseUrl = http://localhost:8000
+
+### Pages
+
+# The ask page: version selector, question form, streamed answer and retrieved context (Livewire)
+GET {{baseUrl}}/
+
+### Health
+
+# Laravel's health check route, used by the app container healthcheck
+GET {{baseUrl}}/up
+
+### Horizon
+
+# Queue dashboard for ingestion jobs (local environment only)
+GET {{baseUrl}}/horizon
