@@ -44,7 +44,8 @@ it('answers a question with citation chips and sources', function () {
         ->assertSeeHtml('href="#source-1" class="cite"')
         ->assertSee('Queues > Job Batching')
         ->assertSeeHtml('https://laravel.com/docs/13.x/queues#job-batching')
-        ->assertDontSee('Routing > Basics');
+        ->assertCount('sources', 1)
+        ->assertSet('sources.0.heading_path', 'Queues > Job Batching');
 });
 
 it('requires a question', function () {
@@ -98,4 +99,44 @@ it('does nothing when generate is called without a pending question', function (
     Livewire::test(AskDocs::class)->call('generate')->assertSet('status', null);
 
     DocsAgent::assertNeverPrompted();
+});
+
+it('shows every retrieved section with its score and cited flag', function () {
+    DocsAgent::fake(['Use `Bus::batch()` [1].']);
+
+    Livewire::test(AskDocs::class)
+        ->set('question', 'How do I batch jobs?')
+        ->call('ask')
+        ->call('generate')
+        ->assertSet('context.0.cited', true)
+        ->assertSet('context.1.cited', false)
+        ->assertSet('context.1.similarity', 0.4)
+        ->assertSee('Retrieved context')
+        ->assertSee('(2 sections, vector search)')
+        ->assertSee('Routing > Basics')
+        ->assertSee('below threshold')
+        ->assertSeeHtml('refuse below');
+});
+
+it('shows the retrieved context for refusals too', function () {
+    config()->set('rag.retrieval.min_similarity', 0.95);
+    DocsAgent::fake()->preventStrayPrompts();
+
+    Livewire::test(AskDocs::class)
+        ->set('question', 'How do I deploy to Mars?')
+        ->call('ask')
+        ->call('generate')
+        ->assertCount('context', 2)
+        ->assertSeeHtml('left: 95%');
+});
+
+it('says when the model judged the sections insufficient', function () {
+    DocsAgent::fake(['NOT_COVERED']);
+
+    Livewire::test(AskDocs::class)
+        ->set('question', 'How do I configure Kubernetes?')
+        ->call('ask')
+        ->call('generate')
+        ->assertSet('status', 'not_covered')
+        ->assertSee('judged that none of them answer the question');
 });

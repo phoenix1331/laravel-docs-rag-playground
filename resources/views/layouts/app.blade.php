@@ -16,7 +16,7 @@
                 <a href="{{ url('/') }}" class="text-sm font-semibold tracking-tight">Ask the Laravel docs</a>
 
                 <nav class="flex items-center gap-5 text-sm text-muted">
-                    <a href="https://github.com/laravel/docs" class="hover:text-ink" rel="noopener">Source: laravel/docs</a>
+                    <a href="https://github.com/laravel/docs" class="hidden hover:text-ink sm:inline" rel="noopener">Source: laravel/docs</a>
 
                     @if (\Laravel\Horizon\Horizon::check(request()))
                         <a href="{{ url(config('horizon.path', 'horizon')) }}" class="hover:text-ink">Horizon</a>

@@ -137,6 +137,9 @@ Single page at `/` (`App\Livewire\AskDocs`, layout `resources/views/layouts/app.
 - Two-step submit: `ask()` validates and renders the question, then `$this->js('$wire.generate()')`; `generate()` streams deltas with `$this->stream(to: 'answer')` into a `wire:stream` element (raw text), then swaps in the rendered answer. Verified live: 26 progressive DOM updates, first text about 3s after submit. `wire:stream` works because FrankenPHP runs in classic (`php-server`) mode, not worker/Octane mode
 - Answers render through `App\Answering\AnswerHtml` (CommonMark, HTML escaped, unsafe links off); `[n]` outside code becomes a chip linking to `#source-n`
 - Ligatures are off for code so PHP's `->` and `=>` are not drawn as arrows
+- Retrieved context panel (right rail on desktop, below the answer on mobile, `<details>` so it collapses): every retrieved section with similarity, cited flag, tokens and excerpt, shown for refusals too
+- `x-relevance-ruler` (`resources/views/components/relevance-ruler.blade.php`): each section as a mark on a 0 to 1 similarity scale with the refusal threshold drawn across; marks within 0.035 stack into lanes; cited marks filled
+- Refusal footers distinguish "no model was called" (threshold) from "model judged none answer" (`NOT_COVERED`)
 - Header links to Horizon when `Horizon::check()` allows it (local by default)
 
 ## Data model

@@ -9,7 +9,7 @@
             <div class="flex flex-col gap-3 sm:flex-row">
                 <div class="flex flex-1 overflow-hidden rounded-md border border-rule bg-surface focus-within:border-cite">
                     <label for="version" class="sr-only">Docs version</label>
-                    <select id="version" wire:model.live="version" class="w-auto shrink-0 border-r border-rule bg-transparent pl-3 pr-1 text-sm text-muted focus:outline-none">
+                    <select id="version" wire:model.live="version" class="w-24 shrink-0 border-r border-rule bg-transparent pl-3 pr-1 text-sm text-muted focus:outline-none">
                         @foreach ($this->versions as $name => $chunks)
                             <option value="{{ $name }}" @disabled($chunks === 0)>{{ $name }}{{ $chunks === 0 ? ' (not ingested)' : '' }}</option>
                         @endforeach
@@ -75,7 +75,9 @@
                     </section>
                 @endif
 
-                @if ($meta['provider'] ?? null)
+                @if ($status === 'not_covered' && ($meta['provider'] ?? null))
+                    <p class="mt-6 text-xs text-muted">Sections were retrieved, but {{ $meta['provider'] }} {{ $meta['model'] }} judged that none of them answer the question.</p>
+                @elseif ($meta['provider'] ?? null)
                     <p class="mt-6 text-xs text-muted">
                         Answered by {{ $meta['provider'] }} {{ $meta['model'] }}, {{ number_format($meta['input_tokens']) }} tokens in and {{ number_format($meta['output_tokens']) }} out.
                     </p>
@@ -86,5 +88,52 @@
         @endif
     </section>
 
-    <aside class="min-w-0"></aside>
+    <aside class="min-w-0 lg:pt-1" aria-labelledby="context-heading">
+        <details open class="group lg:sticky lg:top-6">
+            <summary class="flex cursor-pointer list-none items-baseline justify-between gap-3 border-b border-rule pb-2">
+                <h2 id="context-heading" class="text-sm font-semibold">
+                    Retrieved context
+                    @if ($context)
+                        <span class="font-normal text-muted">({{ count($context) }} sections, {{ $meta['mode'] ?? 'vector' }} search)</span>
+                    @endif
+                </h2>
+                <span class="text-xs text-muted group-open:hidden">Show</span>
+                <span class="hidden text-xs text-muted group-open:inline">Hide</span>
+            </summary>
+
+            @if ($context)
+                <x-relevance-ruler :context="$context" :threshold="$this->threshold" class="mt-5" />
+
+                <ol class="mt-5 space-y-4">
+                    @foreach ($context as $section)
+                        <li id="context-{{ $section['rank'] }}" class="text-sm">
+                            <div class="flex items-baseline gap-2">
+                                <span @class([
+                                    'font-mono text-xs tabular-nums',
+                                    'text-cite' => $section['cited'],
+                                    'text-muted' => ! $section['cited'],
+                                ])>{{ $section['rank'] }}</span>
+                                <a href="{{ $section['url'] }}" target="_blank" rel="noopener" class="min-w-0 flex-1 hover:underline">{{ $section['heading_path'] }}</a>
+                            </div>
+
+                            <p class="mt-1 pl-5 font-mono text-xs text-muted">
+                                {{ number_format($section['similarity'], 3) }}
+                                @if ($section['similarity'] < $this->threshold)
+                                    <span class="text-threshold">below threshold</span>
+                                @endif
+                                @if ($section['cited'])
+                                    <span class="text-cite">cited</span>
+                                @endif
+                                <span>{{ $section['tokens'] }} tokens</span>
+                            </p>
+
+                            <p class="mt-1.5 pl-5 text-xs leading-relaxed text-muted">{{ $section['excerpt'] }}</p>
+                        </li>
+                    @endforeach
+                </ol>
+            @else
+                <p class="mt-4 text-sm text-muted">After you ask, every section retrieved for the question appears here with its similarity score, so you can see why the answer cited what it did, or why it refused.</p>
+            @endif
+        </details>
+    </aside>
 </div>

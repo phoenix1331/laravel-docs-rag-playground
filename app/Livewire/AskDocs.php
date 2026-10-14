@@ -11,6 +11,7 @@ use App\Models\DocChunk;
 use App\Retrieval\RetrievedChunk;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Laravel\Ai\Exceptions\ProviderConnectionException;
 use Laravel\Ai\Exceptions\ProviderOverloadedException;
@@ -49,6 +50,13 @@ class AskDocs extends Component
      * @var list<array{number: int, heading_path: string, url: string}>
      */
     public array $sources = [];
+
+    /**
+     * Every retrieved section, cited or not, so the retrieval step is visible.
+     *
+     * @var list<array{rank: int, heading_path: string, url: string, similarity: float, cited: bool, tokens: int, excerpt: string}>
+     */
+    public array $context = [];
 
     /**
      * @var array<string, mixed>
@@ -129,7 +137,18 @@ class AskDocs extends Component
             'url' => $hit->chunk->url,
         ], $answer->citations());
 
+        $this->context = array_map(fn (RetrievedChunk $hit) => [
+            'rank' => $hit->rank,
+            'heading_path' => $hit->chunk->heading_path,
+            'url' => $hit->chunk->url,
+            'similarity' => round((float) $hit->similarity, 3),
+            'cited' => $answer->cites($hit),
+            'tokens' => $hit->chunk->token_count,
+            'excerpt' => Str::limit(trim(preg_replace('/\s+/', ' ', preg_replace('/^#+ .*$/m', '', $hit->chunk->content))), 280),
+        ], $answer->retrieval->chunks);
+
         $this->meta = [
+            'mode' => $answer->retrieval->mode,
             'provider' => $answer->provider,
             'model' => $answer->model,
             'input_tokens' => $answer->inputTokens,
@@ -139,7 +158,7 @@ class AskDocs extends Component
 
     protected function resetAnswer(): void
     {
-        $this->reset('asked', 'status', 'streaming', 'answerHtml', 'sources', 'meta', 'error');
+        $this->reset('asked', 'status', 'streaming', 'answerHtml', 'sources', 'context', 'meta', 'error');
     }
 
     /**
@@ -153,6 +172,12 @@ class AskDocs extends Component
             $exception instanceof ProviderConnectionException => 'Could not reach the AI provider. Check your connection and API key, then ask again.',
             default => 'Something went wrong while answering. Details are in the application log.',
         };
+    }
+
+    #[Computed]
+    public function threshold(): float
+    {
+        return (float) config('rag.retrieval.min_similarity');
     }
 
     public function render(): View
