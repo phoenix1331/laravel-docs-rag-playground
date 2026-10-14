@@ -89,6 +89,18 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Question log
+    |--------------------------------------------------------------------------
+    |
+    | Store every question with what was retrieved, cited and spent, for
+    | debugging and as raw material for new eval cases.
+    |
+    */
+
+    'log_questions' => (bool) env('RAG_LOG_QUESTIONS', true),
+
+    /*
+    |--------------------------------------------------------------------------
     | Docs source
     |--------------------------------------------------------------------------
     */

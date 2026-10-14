@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Providers;
 
 use App\Answering\DocsAssistant;
+use App\Answering\QuestionLog;
 use App\Chunking\MarkdownChunker;
 use App\Contracts\Embedder;
 use App\Docs\DocsRepository;
@@ -64,6 +65,7 @@ class AppServiceProvider extends ServiceProvider
             config('rag.chat'),
             config('rag.retrieval.min_similarity'),
             config('rag.docs.default_version'),
+            new QuestionLog(config('rag.log_questions')),
         ));
 
         $this->app->bind(DocsRepository::class, fn () => new DocsRepository(

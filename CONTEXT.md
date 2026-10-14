@@ -157,6 +157,8 @@ Single page at `/` (`App\Livewire\AskDocs`, layout `resources/views/layouts/app.
 
 `doc_files`: last successful ingest per page (`version`, `file` unique; `blob_hash`, `signature`, `chunk_count`, `ingested_at`).
 
+`questions`: one row per question asked through `DocsAssistant` (web or CLI): version, question, channel, mode, status (`answered` / `not_covered` / `offline` / `error`), answer, `retrieved` JSON (chunk id, rank, similarity, cited), `cited_chunk_ids`, best similarity, provider, model, tokens, duration, error. Written by `App\Answering\QuestionLog` via `rescue()` so logging never breaks answering; `RAG_LOG_QUESTIONS=false` turns it off. Retrieval eval does not go through the assistant, so it is not logged.
+
 ## Testing
 
 | Suite | Database | Run |

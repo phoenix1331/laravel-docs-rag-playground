@@ -16,6 +16,7 @@ use Laravel\Ai\Exceptions\ProviderOverloadedException;
 use Laravel\Ai\Exceptions\RateLimitedException;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Streaming\Events\TextDelta;
+use Throwable;
 
 /**
  * Answers a question from the docs: retrieve sections, refuse if none are relevant, otherwise ask the model to answer only from them.
@@ -39,6 +40,7 @@ class DocsAssistant
         protected array $chat,
         protected float $minSimilarity,
         protected string $defaultVersion,
+        protected ?QuestionLog $log = null,
     ) {}
 
     /**
@@ -47,8 +49,25 @@ class DocsAssistant
     public function answer(string $question, ?string $version = null, ?Closure $onDelta = null): Answer
     {
         $version ??= $this->defaultVersion;
-        $retrieval = $this->retriever->retrieve($question, $version);
+        $started = hrtime(true);
+        $retrieval = null;
 
+        try {
+            $retrieval = $this->retriever->retrieve($question, $version);
+            $answer = $this->respond($question, $retrieval, $onDelta);
+        } catch (Throwable $exception) {
+            $this->log?->failed($question, $version, $retrieval, $exception, $this->elapsedMs($started));
+
+            throw $exception;
+        }
+
+        $this->log?->answered($answer, $this->elapsedMs($started));
+
+        return $answer;
+    }
+
+    protected function respond(string $question, RetrievalResult $retrieval, ?Closure $onDelta): Answer
+    {
         if (! $this->isCovered($retrieval)) {
             return $this->notCovered($question, $retrieval, $onDelta);
         }
@@ -58,6 +77,11 @@ class DocsAssistant
         }
 
         return $this->generate($question, $retrieval, $onDelta);
+    }
+
+    protected function elapsedMs(int $started): int
+    {
+        return (int) round((hrtime(true) - $started) / 1_000_000);
     }
 
     /**
