@@ -22,7 +22,8 @@ class IngestDocFile implements ShouldQueue
      */
     public int $tries = 8;
 
-    public int $timeout = 300;
+    // Throttled embedding on free tiers can take several minutes for the largest pages.
+    public int $timeout = 1800;
 
     public function __construct(
         public string $version,

@@ -50,3 +50,16 @@ it('rejects vectors with the wrong dimensions', function () {
 
     (new AiSdkEmbedder('voyageai', 'voyage-4', 8))->embedQuery('Routing');
 })->throws(UnexpectedValueException::class, 'Expected 8 dimensions, received 2');
+
+it('caps each request by estimated tokens as well as count', function () {
+    $embedder = new AiSdkEmbedder('voyageai', 'voyage-4', 4, batchSize: 10, batchTokens: 50);
+    $texts = [str_repeat('a', 120), str_repeat('b', 80), str_repeat('c', 120), 'd'];
+
+    expect(array_map('count', $embedder->batches($texts)))->toBe([2, 2]);
+});
+
+it('sends an oversized text on its own rather than dropping it', function () {
+    $embedder = new AiSdkEmbedder('voyageai', 'voyage-4', 4, batchTokens: 10);
+
+    expect(array_map('count', $embedder->batches([str_repeat('a', 400), 'b'])))->toBe([1, 1]);
+});

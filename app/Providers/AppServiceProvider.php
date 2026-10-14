@@ -8,6 +8,7 @@ use App\Chunking\MarkdownChunker;
 use App\Contracts\Embedder;
 use App\Docs\DocsRepository;
 use App\Services\Embeddings\AiSdkEmbedder;
+use App\Services\Embeddings\EmbeddingThrottle;
 use App\Services\Embeddings\FakeEmbedder;
 use Illuminate\Foundation\DevCommands;
 use Illuminate\Support\ServiceProvider;
@@ -29,7 +30,20 @@ class AppServiceProvider extends ServiceProvider
 
             $model = $config['model'] ?? Ai::embeddingProvider($config['provider'])->defaultEmbeddingsModel();
 
-            return new AiSdkEmbedder($config['provider'], $model, $config['dimensions'], $config['batch_size']);
+            $throttle = new EmbeddingThrottle(
+                cache()->store(),
+                $config['requests_per_minute'],
+                $config['tokens_per_minute'],
+            );
+
+            return new AiSdkEmbedder(
+                $config['provider'],
+                $model,
+                $config['dimensions'],
+                $config['batch_size'],
+                $config['batch_tokens'],
+                $throttle->enabled() ? $throttle : null,
+            );
         });
 
         $this->app->bind(MarkdownChunker::class, fn () => new MarkdownChunker(

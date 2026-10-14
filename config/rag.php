@@ -23,6 +23,12 @@ return [
         'model' => env('RAG_EMBEDDING_MODEL') ?: null,
         'dimensions' => (int) env('RAG_EMBEDDING_DIMENSIONS', 1024),
         'batch_size' => (int) env('RAG_EMBEDDING_BATCH_SIZE', 64),
+
+        // Free tiers limit requests and tokens per minute (e.g. Voyage without a card: 3 RPM, 10K TPM).
+        // 0 disables a limit. Tokens are estimated, so leave headroom below the provider's real limit.
+        'batch_tokens' => (int) env('RAG_EMBEDDING_BATCH_TOKENS', 0),
+        'requests_per_minute' => (int) env('RAG_EMBEDDING_RPM', 0),
+        'tokens_per_minute' => (int) env('RAG_EMBEDDING_TPM', 0),
     ],
 
     /*

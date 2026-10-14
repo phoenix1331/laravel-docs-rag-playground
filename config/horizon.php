@@ -210,7 +210,7 @@ return [
             'memory' => 256,
             // Jobs set their own tries and backoff; the timeout must exceed IngestDocFile::$timeout.
             'tries' => 8,
-            'timeout' => 310,
+            'timeout' => 1810,
             'nice' => 0,
         ],
     ],

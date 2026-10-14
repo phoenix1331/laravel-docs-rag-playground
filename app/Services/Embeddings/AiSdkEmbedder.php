@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Embeddings;
 
+use App\Chunking\MarkdownChunker;
 use App\Contracts\Embedder;
 use Laravel\Ai\Embeddings;
 use Laravel\Ai\Providers\Provider;
@@ -16,17 +17,53 @@ class AiSdkEmbedder implements Embedder
         protected string $model,
         protected int $dimensions,
         protected int $batchSize = 64,
+        protected int $batchTokens = 0,
+        protected ?EmbeddingThrottle $throttle = null,
     ) {}
 
     public function embedDocuments(array $texts): array
     {
         $vectors = [];
 
-        foreach (array_chunk($texts, max(1, $this->batchSize)) as $batch) {
+        foreach ($this->batches($texts) as $batch) {
             array_push($vectors, ...$this->generate($batch, 'document'));
         }
 
         return $vectors;
+    }
+
+    /**
+     * Group texts into requests capped by count and, when set, by estimated tokens.
+     *
+     * @param  list<string>  $texts
+     * @return list<list<string>>
+     */
+    public function batches(array $texts): array
+    {
+        $batches = [];
+        $batch = [];
+        $tokens = 0;
+
+        foreach ($texts as $text) {
+            $size = MarkdownChunker::estimateTokens($text);
+            $full = count($batch) >= max(1, $this->batchSize)
+                || ($this->batchTokens > 0 && $batch !== [] && $tokens + $size > $this->batchTokens);
+
+            if ($full) {
+                $batches[] = $batch;
+                $batch = [];
+                $tokens = 0;
+            }
+
+            $batch[] = $text;
+            $tokens += $size;
+        }
+
+        if ($batch !== []) {
+            $batches[] = $batch;
+        }
+
+        return $batches;
     }
 
     public function embedQuery(string $text): array
@@ -52,6 +89,8 @@ class AiSdkEmbedder implements Embedder
      */
     protected function generate(array $inputs, string $inputType): array
     {
+        $this->throttle?->wait(array_sum(array_map(MarkdownChunker::estimateTokens(...), $inputs)));
+
         $embeddings = Embeddings::for($inputs)
             ->dimensions($this->dimensions)
             ->timeout(60)

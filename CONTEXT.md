@@ -40,6 +40,7 @@ Every provider is chosen in `.env`; `.env.example` lists the valid values for ea
 - `fake` embeddings: `FakeEmbedder` (word hashing), offline, no key. `fake` answers: offline templated answer from the top sections
 - Embedding goes through `App\Contracts\Embedder` (`embedDocuments()`, `embedQuery()`); `AiSdkEmbedder` wraps `Laravel\Ai\Embeddings`, batches by `RAG_EMBEDDING_BATCH_SIZE`, checks counts and dimensions, and sends Voyage `input_type` document/query
 - `ollama` runs on the host; the container reaches it at `host.docker.internal:11434` (`extra_hosts` in `docker-compose.yml`)
+- Rate limits: `RAG_EMBEDDING_BATCH_TOKENS` caps each request by estimated tokens; `RAG_EMBEDDING_RPM` / `RAG_EMBEDDING_TPM` drive `App\Services\Embeddings\EmbeddingThrottle`, which reserves evenly spaced slots in the cache (shared across workers, no window-edge bursts). 0 disables. Local `.env`: 8000 / 3 / 9000 with 1 worker. Voyage counts about 16% fewer tokens than the chars/4 estimate
 - Free tiers are busy: `gemini-3.8-flash` often returns overloaded errors, `gemini-3.1-flash-lite` is more reliable
 - Claude Pro does not include API credit; the Anthropic API is billed separately via console.anthropic.com
 
@@ -127,7 +128,9 @@ Migrations check the driver and skip pgvector-only columns/indexes on SQLite. `t
 | Postgres over MongoDB Atlas | Atlas auto-embedding hides the embedding step this project exists to teach; pgvector keeps embed, store and query explicit |
 | `php artisan dev` serves through FrankenPHP and runs Horizon | One dev entry point; `artisan serve` and `queue:listen` are excluded in `AppServiceProvider`, Horizon registers itself as a dev command, so no separate worker container is needed |
 | Low ingest concurrency | `RAG_INGEST_WORKERS` (default 2) Horizon processes; free embedding tiers rate limit, and jobs back off rather than fail |
-| Long queue timeouts | Horizon supervisor timeout 310s > `IngestDocFile::$timeout` 300s; Redis `retry_after` 330s so slow jobs are not handed out twice |
+| Long queue timeouts | `IngestDocFile::$timeout` 1800s (throttled pages can take minutes), Horizon supervisor 1810s, Redis `retry_after` 1830s so slow jobs are not handed out twice |
+| `make horizon-restart` restarts the container | `horizon:terminate` exits cleanly and `php artisan dev` only restarts crashed processes, so Horizon would stay down |
+| Throttle embeddings rather than add a card | Voyage without a payment method allows 3 RPM / 10K TPM; `EmbeddingThrottle` spaces requests so a card-free ingest finishes (about 90 min per version) instead of thrashing on 429s |
 | Container runs as UID 1000 | Files created in the bind mount stay owned by the host user |
 | SQLite in memory for tests | Fast and isolated; Postgres-only features (vector, `tsvector`) are guarded by driver and covered by a separate `pgsql` test group against `laravel_testing` |
 | Voyage AI embeddings, Claude answers, OpenAI optional | Anthropic has no embeddings API; Voyage is its recommended partner. OpenAI can replace either via `.env` |

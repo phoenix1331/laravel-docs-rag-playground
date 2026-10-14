@@ -24,8 +24,8 @@ tinker: ## Open tinker in the app container
 ingest: ## Ingest a docs version, e.g. make ingest V=13.x ARGS=--fresh
 	@$(EXEC) php artisan docs:ingest $(or $(V),13.x) $(ARGS)
 
-horizon-restart: ## Restart Horizon workers to pick up code changes
-	@$(EXEC) php artisan horizon:terminate
+horizon-restart: ## Restart the app container so Horizon picks up code and config changes
+	@docker compose restart app
 
 migrate: ## Run database migrations
 	@$(EXEC) php artisan migrate
