@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\File;
 use Tests\TestCase;
 
 pest()->extend(TestCase::class)
@@ -30,4 +31,35 @@ pest()->extend(TestCase::class)
 function cosineSimilarity(array $a, array $b): float
 {
     return array_sum(array_map(fn (float $x, float $y) => $x * $y, $a, $b));
+}
+
+/**
+ * Point the docs repository at a scratch directory for the test.
+ */
+function useScratchDocs(): string
+{
+    $path = storage_path('framework/testing/docs');
+    File::deleteDirectory($path);
+    config()->set('rag.docs.path', $path);
+
+    return $path;
+}
+
+function writeDocsPage(string $version, string $file, string $markdown): void
+{
+    $directory = config('rag.docs.path')."/{$version}";
+    File::ensureDirectoryExists($directory);
+    File::put("{$directory}/{$file}", $markdown);
+}
+
+function docsPage(string $title, array $sections): string
+{
+    $markdown = "# {$title}\n";
+
+    foreach ($sections as $anchor => $text) {
+        $heading = ucwords(str_replace('-', ' ', $anchor));
+        $markdown .= "\n<a name=\"{$anchor}\"></a>\n## {$heading}\n\n{$text}\n";
+    }
+
+    return $markdown;
 }

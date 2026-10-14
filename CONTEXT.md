@@ -69,6 +69,17 @@ Every provider is chosen in `.env`; `.env.example` lists the valid values for ea
 
 13.x baseline (800 max, 60 min): 2216 chunks, ~800K tokens, median 297, none over the max.
 
+## Ingestion
+
+| Piece | Role |
+|---|---|
+| `App\Ingestion\DocFileIndexer` | Chunks one page, compares with stored rows by anchor + hash + `embedding_model`, embeds only new/changed chunks, upserts, deletes anchors gone from the page |
+| `App\Jobs\IngestDocFile` | Queued, batchable wrapper; releases with backoff (15s up to 300s, 8 tries) on rate limit, overloaded or connection errors; other errors fail |
+| `App\Ingestion\IngestStats` | Per-batch cache counters (`embedded`, `reused`, `unchanged`, `deleted`) for reporting |
+
+- Identical content under a new anchor reuses the stored vector (`reused`), so section moves cost nothing
+- Upserts go through `DB::table()` with the vector as a JSON array literal, which pgvector parses directly
+
 ## Data model
 
 `doc_chunks`: one row per docs section (or part of an oversized section).
