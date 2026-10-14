@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help up down build shell migrate seed test test-pgsql lint lint-test logs fresh
+.PHONY: help up down build shell migrate seed tinker test test-pgsql lint lint-test logs fresh
 
 EXEC = docker compose exec app
 
@@ -17,6 +17,9 @@ build: ## Build the app image
 
 shell: ## Open a shell in the app container
 	@$(EXEC) bash
+
+tinker: ## Open tinker in the app container
+	@docker compose exec -e XDG_CONFIG_HOME=/tmp app php artisan tinker
 
 migrate: ## Run database migrations
 	@$(EXEC) php artisan migrate
