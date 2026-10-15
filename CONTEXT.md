@@ -68,7 +68,9 @@ Every provider is chosen in `.env`; `.env.example` lists the valid values for ea
 | Content | Starts with the heading line; `embeddingText()` prefixes the heading path; `hash` is sha256 of `embeddingText()` |
 | Tokens | Estimated as characters / 4 |
 
-13.x baseline (800 max, 60 min): 2216 chunks, ~800K tokens, median 297, none over the max.
+13.x (800 max, 60 min): 102 pages, 2215 chunks, ~800K tokens, median 297, none over the max.
+
+- Lines split on `\r\n|\r|\n`, never `\R`: without the `u` flag `\R` matches a lone 0x85 byte and cut `✅` (e2 9c 85) in `precognition.md`, producing invalid UTF-8 that failed the embedding request
 
 ## Ingestion
 
@@ -84,6 +86,7 @@ Every provider is chosen in `.env`; `.env.example` lists the valid values for ea
 - A page is recorded in `doc_files` only after it indexes successfully, so failed pages are retried on the next run
 - Refuses to run when stored chunks for the version use another `embedding_model`, unless `--fresh`
 - Identical content under a new anchor reuses the stored vector (`reused`), so section moves cost nothing
+- `IngestDocFile` logs a warning with the exception class and message before each backoff release. Errors it does not catch are still retried by the worker with the same backoff, so check the log before assuming a rate limit
 - Upserts go through `DB::table()` with the vector as a JSON array literal, which pgvector parses directly
 
 ## Retrieval
@@ -161,6 +164,19 @@ Single page at `/` (`App\Livewire\AskDocs`, layout `resources/views/layouts/app.
 - Chunks are matched as `file#fragment` of the chunk URL, so `-part-N` chunks count as their section
 - Metric maths lives in `App\Evaluation\RetrievalMetrics` (pure, unit tested)
 
+Vector baseline (13.x, `voyage-4` 1024 dims, 2215 chunks, 2026-10-15):
+
+| Metric | Value |
+|---|---|
+| Recall@1 / @5 / @10 | 67.7% / 96.8% / 100% |
+| MRR (k = 5) | 0.803 |
+| Answerable under threshold (0.30) | 0 |
+| Unanswerable refused by threshold | 1 of 5 (PyTorch 0.244); Kubernetes 0.468, Oracle 0.453, Django 0.503, GraphQL 0.512 reach the model |
+
+- Only miss at k = 5: `cache-locks` ("only one process runs a piece of code at a time") ranks `scheduling.md#running-tasks-on-one-server` and `queues.md#unique-jobs` above `cache.md#atomic-locks`; neighbouring features share the vocabulary
+- Unanswerable best similarities (0.45 to 0.51) overlap answerable ones, so raising `RAG_MIN_SIMILARITY` cannot separate them; refusal depends on `NOT_COVERED`
+- The first partial-ingest run scored 61.3%: 11 of 12 misses were pages not yet stored. Check every page has chunks before trusting a score
+
 ## Data model
 
 `doc_chunks`: one row per docs section (or part of an oversized section).
@@ -212,6 +228,7 @@ Migrations check the driver and skip pgvector-only columns/indexes on SQLite. `t
 | `php artisan dev` serves through FrankenPHP and runs Horizon | One dev entry point; `artisan serve` and `queue:listen` are excluded in `AppServiceProvider`, Horizon registers itself as a dev command, so no separate worker container is needed |
 | Low ingest concurrency | `RAG_INGEST_WORKERS` (default 2) Horizon processes; free embedding tiers rate limit, and jobs back off rather than fail |
 | Long queue timeouts | `IngestDocFile::$timeout` 1800s (throttled pages can take minutes), Horizon supervisor 1810s, Redis `retry_after` 1830s so slow jobs are not handed out twice |
+| Horizon keeps recent, pending and completed jobs for a day | A throttled ingest can run for hours; with the 60 minute default, records expired before jobs ran and the dashboard showed nothing |
 | `make horizon-restart` restarts the container | `horizon:terminate` exits cleanly and `php artisan dev` only restarts crashed processes, so Horizon would stay down |
 | Throttle embeddings rather than add a card | Voyage without a payment method allows 3 RPM / 10K TPM; `EmbeddingThrottle` spaces requests so a card-free ingest finishes (about 90 min per version) instead of thrashing on 429s |
 | Container runs as UID 1000 | Files created in the bind mount stay owned by the host user |
