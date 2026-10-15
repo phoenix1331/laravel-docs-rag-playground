@@ -142,6 +142,10 @@ Single page at `/` (`App\Livewire\AskDocs`, layout `resources/views/layouts/app.
 - Refusal footers distinguish "no model was called" (threshold) from "model judged none answer" (`NOT_COVERED`)
 - Header links to Horizon when `Horizon::check()` allows it (local by default)
 
+## Evaluation
+
+`database/eval/questions.json`: 31 answerable 13.x questions (plain developer wording, not heading text; a few name exact methods to test keyword matching) plus 5 unanswerable (3 off-topic, 2 Laravel-sounding near misses). Each answerable question lists acceptable `page.md#anchor` entries; a retrieved chunk matches on page + URL fragment, so split parts count. Expected anchors were taken from real chunker output, since short sections merged into a neighbour lose their own anchor.
+
 ## Data model
 
 `doc_chunks`: one row per docs section (or part of an oversized section).
