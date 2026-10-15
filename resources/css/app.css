@@ -50,6 +50,15 @@
         font-variant-ligatures: none;
     }
 
+    /* Tailwind v4 resets buttons to the default cursor; every clickable element shows a pointer. */
+    a[href], button, select, summary, label[for], [role='button'] {
+        cursor: pointer;
+    }
+
+    :is(button, select):disabled {
+        cursor: not-allowed;
+    }
+
     :focus-visible {
         outline: 2px solid var(--color-cite);
         outline-offset: 2px;
