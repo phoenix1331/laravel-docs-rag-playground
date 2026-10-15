@@ -96,8 +96,12 @@ Every provider is chosen in `.env`; `.env.example` lists the valid values for ea
 | Mode | How |
 |---|---|
 | `vector` | `embedQuery()`, then `DocChunk::forVersion()` + `selectVectorDistance()` + `whereVectorSimilarTo(minSimilarity: 0.0)`, limit k; similarity = 1 - cosine distance |
+| `hybrid` | Vector top 4k and full-text top 4k (`CANDIDATES_PER_RESULT`), merged by `ReciprocalRankFusion::fuse()` (sum of 1 / (`RAG_RRF_K` + rank), default 60), cut to k. Score = RRF; similarity is still cosine, loaded for keyword-only hits, so the threshold and ruler work unchanged. `vectorRank` / `keywordRank` on each hit |
 
-- `php artisan docs:search "{query}" {--docs-version=} {--k=} {--mode=} {--content}` (or `make search Q="..."`): ranked results with scores and links, no chat model; warns when the best similarity is under `RAG_MIN_SIMILARITY`. `--docs-version` because `--version` is reserved by Artisan
+- Full-text query: `plainto_tsquery` with `&` replaced by `|`, so any question word matches; `websearch_to_tsquery` requires every word and matched 0 of 2215 chunks for a typical question (600 with OR). Ranked by `ts_rank(..., 1)` (length-normalised) with the `english` config
+- RRF favours sections both searches return: anything in both lists, even ranked about 20th, outscores a section only one list ranked 4th (1/80 + 1/80 > 1/64). Hybrid is one embedding plus three SQL queries
+
+- `php artisan docs:search "{query}" {--docs-version=} {--k=} {--mode=} {--content}` (or `make search Q="..."`): ranked results with scores and links; hybrid adds similarity and the vector and keyword positions, no chat model; warns when the best similarity is under `RAG_MIN_SIMILARITY`. `--docs-version` because `--version` is reserved by Artisan
 - Question embeddings skip the throttle (retrying briefly on 429) so a question never queues behind an ingest; card-free ingestion is token-bound at about 1 request a minute, leaving spare requests
 - The version filter is in the SQL, never left to the model
 - `retrieve()` takes an optional precomputed query vector, so callers can batch question embeddings

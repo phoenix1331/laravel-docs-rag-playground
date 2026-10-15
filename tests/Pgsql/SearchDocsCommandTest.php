@@ -55,3 +55,10 @@ it('fails clearly when a version has not been ingested', function () {
         ->expectsOutputToContain('Run docs:ingest 13.x first')
         ->assertFailed();
 });
+
+it('shows where each section ranked in vector and keyword search in hybrid mode', function () {
+    $this->artisan('docs:search', ['query' => 'dispatch a batch of jobs', '--mode' => 'hybrid'])
+        ->expectsOutputToContain('hybrid search in 13.x, top 2')
+        ->expectsOutputToContain('Keyword #')
+        ->assertSuccessful();
+});

@@ -42,11 +42,14 @@ class SearchDocs extends Command
 
         $this->components->info(sprintf('%s search in %s, top %d', $result->mode, $result->version, count($result->chunks)));
 
+        $hybrid = $result->mode === 'hybrid';
+
         $this->table(
-            ['#', 'Score', 'Section', 'Tokens'],
+            $hybrid ? ['#', 'RRF', 'Similarity', 'Vector #', 'Keyword #', 'Section', 'Tokens'] : ['#', 'Score', 'Section', 'Tokens'],
             array_map(fn (RetrievedChunk $hit) => [
                 $hit->rank,
-                number_format($hit->score, 3),
+                number_format($hit->score, $hybrid ? 4 : 3),
+                ...($hybrid ? [number_format((float) $hit->similarity, 3), $hit->vectorRank ?? '-', $hit->keywordRank ?? '-'] : []),
                 Str::limit($hit->chunk->heading_path, 70)."\n".$hit->chunk->url,
                 $hit->chunk->token_count,
             ], $result->chunks),

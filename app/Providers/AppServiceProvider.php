@@ -59,6 +59,7 @@ class AppServiceProvider extends ServiceProvider
             $app->make(Embedder::class),
             config('rag.retrieval.mode'),
             config('rag.retrieval.top_k'),
+            config('rag.retrieval.rrf_k'),
         ));
 
         $this->app->bind(DocsAssistant::class, fn ($app) => new DocsAssistant(

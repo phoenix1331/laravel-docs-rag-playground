@@ -69,3 +69,66 @@ it('does not load embeddings into the results', function () {
     expect($chunk->getAttributes())->not->toHaveKey('embedding')
         ->and($chunk->url)->toContain('/docs/13.x/');
 });
+
+describe('hybrid mode', function () {
+    it('finds an exact method name that vector search ranks low', function () {
+        storeChunk('13.x', 'similarity', 'Use the whereVectorSimilarTo method to filter rows');
+        foreach (range(1, 8) as $n) {
+            storeChunk('13.x', "noise-{$n}", "Filter rows of the query builder by method {$n}");
+        }
+
+        $query = 'which method filters rows by whereVectorSimilarTo';
+        $vector = $this->retriever->retrieve($query, '13.x', 'vector', topK: 9);
+        $hybrid = $this->retriever->retrieve($query, '13.x', 'hybrid', topK: 3);
+        $vectorRank = collect($vector->chunks)->search(fn (RetrievedChunk $hit) => $hit->chunk->anchor === 'similarity') + 1;
+
+        expect($hybrid->mode)->toBe('hybrid')
+            ->and($hybrid->chunks[0]->chunk->anchor)->toBe('similarity')
+            ->and($hybrid->chunks[0]->keywordRank)->toBe(1)
+            ->and($hybrid->chunks[0]->vectorRank)->toBe($vectorRank);
+    });
+
+    it('scores with rrf and keeps cosine similarity for the threshold', function () {
+        storeChunk('13.x', 'job-batching', 'Dispatch a batch of jobs and run a callback when the batch finishes');
+        storeChunk('13.x', 'basic-routing', 'Define a route using the Route facade');
+
+        $result = $this->retriever->retrieve('dispatch a batch of jobs', '13.x', 'hybrid');
+        $top = $result->chunks[0];
+
+        expect($top->chunk->anchor)->toBe('job-batching')
+            ->and($top->score)->toEqualWithDelta(1 / 61 + 1 / 61, 1e-9)
+            ->and($top->similarity)->toEqualWithDelta(cosineSimilarity(
+                app(Embedder::class)->embedQuery('dispatch a batch of jobs'),
+                app(Embedder::class)->embedDocuments(['Dispatch a batch of jobs and run a callback when the batch finishes'])[0],
+            ), 1e-4)
+            ->and($result->bestSimilarity())->toBe($top->similarity);
+    });
+
+    it('keeps sections only one search found, with their similarity', function () {
+        storeChunk('13.x', 'keyword-only', 'zebra');
+        storeChunk('13.x', 'vector-only', 'Dispatch jobs');
+
+        $result = $this->retriever->retrieve('zebra', '13.x', 'hybrid', topK: 1);
+
+        expect($result->chunks[0]->chunk->anchor)->toBe('keyword-only')
+            ->and($result->chunks[0]->keywordRank)->toBe(1)
+            ->and($result->chunks[0]->similarity)->toBeFloat();
+    });
+
+    it('limits results to top k and never crosses versions', function () {
+        storeChunk('13.x', 'job-batching', 'Dispatch a batch of jobs');
+        storeChunk('13.x', 'job-chaining', 'Chain jobs to run in sequence');
+        storeChunk('12.x', 'job-batching', 'Dispatch a batch of jobs');
+
+        $result = $this->retriever->retrieve('batch of jobs', '13.x', 'hybrid', topK: 1);
+
+        expect($result->chunks)->toHaveCount(1)
+            ->and($result->chunks[0]->chunk->version)->toBe('13.x');
+    });
+
+    it('still answers when no query word is in the index', function () {
+        storeChunk('13.x', 'job-batching', 'Dispatch a batch of jobs');
+
+        expect($this->retriever->retrieve('the and of', '13.x', 'hybrid')->chunks)->toHaveCount(1);
+    });
+});
