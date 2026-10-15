@@ -1,10 +1,19 @@
 .DEFAULT_GOAL := help
-.PHONY: help up down build shell migrate seed tinker ingest search ask eval horizon-restart test test-pgsql lint lint-test logs fresh
+.PHONY: help install up down build shell migrate seed tinker ingest search ask eval horizon-restart test test-pgsql lint lint-test logs fresh
 
 EXEC = docker compose exec app
 
 help: ## List available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
+
+install: ## First-time setup: .env, image, PHP and JS dependencies, app key, database
+	@test -f .env || cp .env.example .env
+	@docker compose build
+	@docker compose run --rm --no-deps app composer install
+	@docker compose run --rm --no-deps app npm install
+	@grep -q '^APP_KEY=base64:' .env || docker compose run --rm --no-deps app php artisan key:generate
+	@docker compose up -d --wait
+	@$(EXEC) php artisan migrate --force
 
 up: ## Start all containers in the background
 	@docker compose up -d
