@@ -9,6 +9,7 @@ use App\Ingestion\IngestStats;
 use Illuminate\Bus\Batchable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Support\Facades\Log;
 use Laravel\Ai\Exceptions\ProviderConnectionException;
 use Laravel\Ai\Exceptions\ProviderOverloadedException;
 use Laravel\Ai\Exceptions\RateLimitedException;
@@ -48,9 +49,17 @@ class IngestDocFile implements ShouldQueue
 
         try {
             $result = $indexer->index($this->version, $this->file);
-        } catch (RateLimitedException|ProviderOverloadedException|ProviderConnectionException) {
+        } catch (RateLimitedException|ProviderOverloadedException|ProviderConnectionException $exception) {
             $backoff = $this->backoff();
-            $this->release($backoff[min($this->attempts() - 1, count($backoff) - 1)]);
+            $delay = $backoff[min($this->attempts() - 1, count($backoff) - 1)];
+
+            Log::warning("Retrying {$this->version}/{$this->file} in {$delay}s: ".class_basename($exception), [
+                'attempt' => $this->attempts(),
+                'tries' => $this->tries,
+                'message' => $exception->getMessage(),
+            ]);
+
+            $this->release($delay);
 
             return;
         }

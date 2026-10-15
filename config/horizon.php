@@ -111,12 +111,15 @@ return [
     | persist the recent and failed jobs. Typically, recent jobs are kept
     | for one hour while all failed jobs are stored for an entire week.
     |
+    | Kept for a day here: a throttled ingest can run for hours, and job
+    | records that expire before the job runs vanish from the dashboard.
+    |
     */
 
     'trim' => [
-        'recent' => 60,
-        'pending' => 60,
-        'completed' => 60,
+        'recent' => 1440,
+        'pending' => 1440,
+        'completed' => 1440,
         'recent_failed' => 10080,
         'failed' => 10080,
         'monitored' => 10080,
