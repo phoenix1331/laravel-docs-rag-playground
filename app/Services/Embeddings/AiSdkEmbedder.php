@@ -25,13 +25,15 @@ class AiSdkEmbedder implements Embedder
 
     public function embedDocuments(array $texts): array
     {
-        $vectors = [];
+        return $this->embedBatched($texts, 'document');
+    }
 
-        foreach ($this->batches($texts) as $batch) {
-            array_push($vectors, ...$this->generate($batch, 'document'));
-        }
-
-        return $vectors;
+    /**
+     * Bulk queries (such as an eval run) go through the throttle like documents, unlike a single question.
+     */
+    public function embedQueries(array $texts): array
+    {
+        return $this->embedBatched($texts, 'query');
     }
 
     /**
@@ -93,6 +95,21 @@ class AiSdkEmbedder implements Embedder
     public function dimensions(): int
     {
         return $this->dimensions;
+    }
+
+    /**
+     * @param  list<string>  $texts
+     * @return list<list<float>>
+     */
+    protected function embedBatched(array $texts, string $inputType): array
+    {
+        $vectors = [];
+
+        foreach ($this->batches($texts) as $batch) {
+            array_push($vectors, ...$this->generate($batch, $inputType));
+        }
+
+        return $vectors;
     }
 
     /**

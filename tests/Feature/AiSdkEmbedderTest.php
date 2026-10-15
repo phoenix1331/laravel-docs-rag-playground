@@ -39,6 +39,19 @@ it('tags voyage requests as document or query', function () {
     Embeddings::assertGenerated(fn (EmbeddingsPrompt $prompt) => $prompt->providerOptions === ['input_type' => 'query']);
 });
 
+it('embeds several queries in batched requests tagged as queries', function () {
+    Embeddings::fake(fn (EmbeddingsPrompt $prompt) => array_map(
+        fn (string $input) => array_fill(0, 4, (float) strlen($input)),
+        $prompt->inputs,
+    ));
+
+    $vectors = (new AiSdkEmbedder('voyageai', 'voyage-4', 4, batchSize: 2))->embedQueries(['a', 'bb', 'ccc']);
+
+    expect(array_column($vectors, 0))->toBe([1.0, 2.0, 3.0]);
+    Embeddings::assertGenerated(fn (EmbeddingsPrompt $prompt) => $prompt->count() === 2
+        && $prompt->providerOptions === ['input_type' => 'query']);
+});
+
 it('sends no voyage options to openai', function () {
     Embeddings::fake();
 

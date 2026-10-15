@@ -22,6 +22,14 @@ interface Embedder
     public function embedQuery(string $text): array;
 
     /**
+     * Embed several search queries in as few requests as possible, returning one vector per input in the same order.
+     *
+     * @param  list<string>  $texts
+     * @return list<list<float>>
+     */
+    public function embedQueries(array $texts): array;
+
+    /**
      * The name of the model producing the vectors, stored alongside each chunk.
      */
     public function model(): string;

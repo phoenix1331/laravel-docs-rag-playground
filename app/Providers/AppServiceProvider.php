@@ -9,6 +9,7 @@ use App\Answering\QuestionLog;
 use App\Chunking\MarkdownChunker;
 use App\Contracts\Embedder;
 use App\Docs\DocsRepository;
+use App\Evaluation\RetrievalEvaluator;
 use App\Retrieval\Retriever;
 use App\Services\Embeddings\AiSdkEmbedder;
 use App\Services\Embeddings\EmbeddingThrottle;
@@ -66,6 +67,12 @@ class AppServiceProvider extends ServiceProvider
             config('rag.retrieval.min_similarity'),
             config('rag.docs.default_version'),
             new QuestionLog(config('rag.log_questions')),
+        ));
+
+        $this->app->bind(RetrievalEvaluator::class, fn ($app) => new RetrievalEvaluator(
+            $app->make(Retriever::class),
+            $app->make(Embedder::class),
+            config('rag.retrieval.min_similarity'),
         ));
 
         $this->app->bind(DocsRepository::class, fn () => new DocsRepository(

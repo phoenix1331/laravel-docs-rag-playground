@@ -25,14 +25,17 @@ class Retriever
      * Find the chunks of one docs version most relevant to the query.
      *
      * The version filter is part of the SQL query itself, so chunks from another version can never be returned.
+     * Pass $queryEmbedding when the query was already embedded, for example as part of a batch.
+     *
+     * @param  list<float>|null  $queryEmbedding
      */
-    public function retrieve(string $query, string $version, ?string $mode = null, ?int $topK = null): RetrievalResult
+    public function retrieve(string $query, string $version, ?string $mode = null, ?int $topK = null, ?array $queryEmbedding = null): RetrievalResult
     {
         $mode ??= $this->defaultMode;
         $topK ??= $this->defaultTopK;
 
         $chunks = match ($mode) {
-            'vector' => $this->vector($query, $version, $topK),
+            'vector' => $this->vector($queryEmbedding ?? $this->embedder->embedQuery($query), $version, $topK),
             default => throw new InvalidArgumentException("Unknown retrieval mode [{$mode}]. Use one of: ".implode(', ', self::MODES).'.'),
         };
 
@@ -42,13 +45,12 @@ class Retriever
     /**
      * Rank chunks by cosine similarity between their embedding and the query's embedding.
      *
+     * @param  list<float>  $embedding
      * @return list<RetrievedChunk>
      */
-    protected function vector(string $query, string $version, int $topK): array
+    protected function vector(array $embedding, string $version, int $topK): array
     {
         $this->enableIterativeScan();
-
-        $embedding = $this->embedder->embedQuery($query);
 
         $rows = DocChunk::forVersion($version)
             ->select(['id', 'version', 'file', 'heading', 'heading_path', 'anchor', 'url', 'content', 'token_count'])

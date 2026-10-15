@@ -32,6 +32,11 @@ class FakeEmbedder implements Embedder
         return $this->vector($text);
     }
 
+    public function embedQueries(array $texts): array
+    {
+        return array_map(fn (string $text) => $this->vector($text), $texts);
+    }
+
     public function model(): string
     {
         return 'fake';

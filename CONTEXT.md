@@ -97,6 +97,7 @@ Every provider is chosen in `.env`; `.env.example` lists the valid values for ea
 - `php artisan docs:search "{query}" {--docs-version=} {--k=} {--mode=} {--content}` (or `make search Q="..."`): ranked results with scores and links, no chat model; warns when the best similarity is under `RAG_MIN_SIMILARITY`. `--docs-version` because `--version` is reserved by Artisan
 - Question embeddings skip the throttle (retrying briefly on 429) so a question never queues behind an ingest; card-free ingestion is token-bound at about 1 request a minute, leaving spare requests
 - The version filter is in the SQL, never left to the model
+- `retrieve()` takes an optional precomputed query vector, so callers can batch question embeddings
 - Embeddings are not selected into results
 - `hnsw.iterative_scan = strict_order` is set per connection. Without it, when the planner uses the HNSW index, the index returns its `ef_search` (40) nearest rows before the version filter, so a 50/50 two-version table returned **0** rows for `ORDER BY distance LIMIT 6` in testing
 - At this size the planner prefers an exact scan + sort, because the `whereVectorSimilarTo` distance condition makes HNSW look costlier; results are exact and take milliseconds. The iterative scan setting protects the HNSW path as the table grows
@@ -145,6 +146,20 @@ Single page at `/` (`App\Livewire\AskDocs`, layout `resources/views/layouts/app.
 ## Evaluation
 
 `database/eval/questions.json`: 31 answerable 13.x questions (plain developer wording, not heading text; a few name exact methods to test keyword matching) plus 5 unanswerable (3 off-topic, 2 Laravel-sounding near misses). Each answerable question lists acceptable `page.md#anchor` entries; a retrieved chunk matches on page + URL fragment, so split parts count. Expected anchors were taken from real chunker output, since short sections merged into a neighbour lose their own anchor.
+
+`php artisan rag:eval {--mode=} {--k=5} {--docs-version=} {--file=}` (or `make eval`) scores retrieval only, no chat model:
+
+| Output | Meaning |
+|---|---|
+| Recall@k | Share of answerable questions with any expected section in the top k (hit rate, since any one expected entry counts) |
+| MRR | Mean of 1 / rank of the first expected section, a miss scoring 0 |
+| Answerable under threshold | Questions the `RAG_MIN_SIMILARITY` check alone would refuse (false refusals) |
+| Misses | Expected sections against the top 3 retrieved and the best similarity |
+| Unanswerable | Best similarity and whether the threshold refuses it or it reaches the model and relies on `NOT_COVERED` |
+
+- `App\Evaluation\RetrievalEvaluator` embeds the whole set with `Embedder::embedQueries()` (one throttled request instead of one per question, which would trip Voyage's card-free 3 RPM), then passes each vector to `Retriever::retrieve(..., $queryEmbedding)`
+- Chunks are matched as `file#fragment` of the chunk URL, so `-part-N` chunks count as their section
+- Metric maths lives in `App\Evaluation\RetrievalMetrics` (pure, unit tested)
 
 ## Data model
 
