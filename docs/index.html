@@ -1,0 +1,523 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Laravel Docs RAG Playground</title>
+<meta name="description" content="How a retrieval-augmented generation system over the Laravel docs works, step by step, and how to measure it.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%230f7a83%27/%3E%3Cpath d=%27M9 22V10h6.5a4 4 0 0 1 0 8H9m6-0 5 4%27 stroke=%27%23fff%27 stroke-width=%273%27 fill=%27none%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Public+Sans:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap" rel="stylesheet">
+<style>
+:root {
+    --paper: #f5f7fa;
+    --surface: #ffffff;
+    --ink: #1b2330;
+    --muted: #5a6477;
+    --rule: #dce1e8;
+    --cite: #0f7a83;
+    --cite-soft: #e2f2f3;
+    --threshold: #b26b00;
+    --threshold-soft: #fbf0df;
+    --worse: #b42318;
+    --sans: 'Public Sans', ui-sans-serif, system-ui, sans-serif;
+    --serif: 'Source Serif 4', ui-serif, Georgia, serif;
+    --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+    :root {
+        --paper: #11161d;
+        --surface: #181f28;
+        --ink: #e6eaf0;
+        --muted: #9aa4b5;
+        --rule: #2a3340;
+        --cite: #45b9c2;
+        --cite-soft: #143338;
+        --threshold: #e3a548;
+        --threshold-soft: #2e2414;
+        --worse: #f97066;
+    }
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 1.5rem; }
+body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+}
+a { color: var(--cite); text-underline-offset: 2px; }
+a[href], button, summary { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--cite); outline-offset: 2px; }
+code, pre, kbd { font-family: var(--mono); font-variant-ligatures: none; }
+:not(pre) > code {
+    font-size: 0.86em;
+    background: var(--cite-soft);
+    padding: 0.1em 0.35em;
+    border-radius: 4px;
+    overflow-wrap: anywhere;
+}
+pre {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    padding: 0.9rem 1rem;
+    overflow-x: auto;
+    font-size: 0.82rem;
+    line-height: 1.55;
+    margin: 1rem 0;
+}
+
+/* Layout: sidebar contents on wide screens, a horizontal strip on phones. */
+.shell { max-width: 1180px; margin: 0 auto; padding: 0 16px; display: grid; gap: 3rem; }
+@media (min-width: 960px) { .shell { grid-template-columns: 220px minmax(0, 1fr); padding: 0 2rem; } }
+
+.toc { padding-top: 1.25rem; }
+@media (min-width: 960px) { .toc { position: sticky; top: 0; align-self: start; max-height: 100vh; overflow-y: auto; padding-top: 2.5rem; } }
+.toc .brand { font-weight: 700; letter-spacing: -0.01em; color: var(--ink); text-decoration: none; display: block; margin-bottom: 1rem; }
+.toc ol { list-style: none; margin: 0; padding: 0; display: flex; gap: 0.25rem 1rem; flex-wrap: wrap; font-size: 0.9rem; }
+@media (min-width: 960px) { .toc ol { flex-direction: column; flex-wrap: nowrap; } }
+.toc a { color: var(--muted); text-decoration: none; display: block; padding: 0.15rem 0; }
+.toc a:hover { color: var(--ink); }
+.toc .num { font-family: var(--mono); font-size: 0.75rem; color: var(--cite); margin-right: 0.4rem; }
+.toc .repo { margin-top: 1.25rem; font-size: 0.85rem; }
+
+main { min-width: 0; padding-bottom: 5rem; }
+
+/* Hero */
+.hero { padding: 2.5rem 0 2rem; border-bottom: 1px solid var(--rule); }
+.eyebrow { font-family: var(--mono); font-size: 0.75rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--cite); margin: 0 0 0.75rem; }
+h1 { font-size: clamp(2rem, 5vw, 3rem); line-height: 1.1; letter-spacing: -0.025em; margin: 0 0 1rem; font-weight: 700; }
+.lede { font-family: var(--serif); font-size: 1.2rem; line-height: 1.6; max-width: 62ch; margin: 0; }
+.lede + p { color: var(--muted); max-width: 62ch; }
+
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1px; background: var(--rule); border: 1px solid var(--rule); border-radius: 10px; overflow: hidden; margin-top: 2rem; }
+.stat { background: var(--surface); padding: 1rem 1.1rem; }
+.stat b { display: block; font-size: 1.75rem; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.stat span { font-size: 0.82rem; color: var(--muted); }
+
+/* Sections */
+section { padding-top: 3.5rem; }
+h2 { font-size: 1.65rem; letter-spacing: -0.02em; line-height: 1.2; margin: 0 0 0.5rem; display: flex; align-items: baseline; gap: 0.6rem; }
+h2 .num { font-family: var(--mono); font-size: 0.85rem; color: var(--cite); font-weight: 600; }
+h3 { font-size: 1.1rem; margin: 2.25rem 0 0.5rem; letter-spacing: -0.01em; }
+h4 { font-size: 0.95rem; margin: 1.5rem 0 0.4rem; }
+.intro { font-family: var(--serif); font-size: 1.1rem; max-width: 64ch; margin: 0.5rem 0 1.25rem; }
+main p, main li { max-width: 70ch; }
+main ul, main ol { padding-left: 1.25rem; }
+li + li { margin-top: 0.3rem; }
+
+.table-wrap { overflow-x: auto; margin: 1rem 0; border: 1px solid var(--rule); border-radius: 8px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
+th, td { text-align: left; padding: 0.6rem 0.8rem; border-bottom: 1px solid var(--rule); vertical-align: top; }
+th { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); font-weight: 600; }
+th code { text-transform: none; letter-spacing: 0; }
+td:first-child { min-width: 9rem; }
+tr:last-child td { border-bottom: 0; }
+td.n { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.best { font-weight: 700; color: var(--cite); }
+.down { color: var(--worse); }
+
+.callout { border-left: 3px solid var(--cite); background: var(--cite-soft); padding: 0.85rem 1rem; border-radius: 0 8px 8px 0; margin: 1.25rem 0; max-width: 70ch; }
+.callout.warn { border-color: var(--threshold); background: var(--threshold-soft); }
+.callout p { margin: 0; }
+.callout p + p { margin-top: 0.5rem; }
+
+/* Pipeline diagram */
+.pipeline { margin: 1.5rem 0; display: grid; gap: 1rem; }
+.lane { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 1rem; }
+.lane-label { font-family: var(--mono); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-bottom: 0.75rem; }
+.lane-label b { color: var(--ink); }
+.steps { display: flex; flex-wrap: wrap; align-items: stretch; gap: 0.5rem; list-style: none; padding: 0; margin: 0; }
+.steps li { margin: 0; flex: 1 1 120px; border: 1px solid var(--rule); border-radius: 8px; padding: 0.55rem 0.7rem; font-size: 0.85rem; line-height: 1.35; position: relative; background: var(--paper); }
+.steps li b { display: block; font-size: 0.9rem; }
+.steps li span { color: var(--muted); }
+.steps li.key { border-color: var(--cite); }
+
+/* Bar chart for results */
+.bars { display: grid; gap: 0.7rem; margin: 1.25rem 0; max-width: 640px; }
+.bar { display: grid; grid-template-columns: minmax(110px, 190px) 1fr 3.5rem; gap: 0.75rem; align-items: center; font-size: 0.85rem; }
+.bar .track { height: 0.7rem; background: var(--rule); border-radius: 99px; overflow: hidden; }
+.bar .fill { height: 100%; background: var(--cite); border-radius: 99px; }
+.bar .fill.faint { background: var(--muted); }
+.bar .v { font-family: var(--mono); font-variant-numeric: tabular-nums; text-align: right; }
+@media (max-width: 559px) {
+    .bar { grid-template-columns: 1fr 3.5rem; row-gap: 0.3rem; }
+    .bar > span:first-child { grid-column: 1 / -1; }
+}
+
+.grid-2 { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); margin: 1.25rem 0; }
+.card { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 1rem 1.1rem; }
+.card h4 { margin-top: 0; }
+.card p { margin: 0.3rem 0 0; font-size: 0.92rem; }
+
+.formula { font-family: var(--mono); font-size: 0.95rem; background: var(--surface); border: 1px solid var(--rule); border-radius: 8px; padding: 0.9rem 1rem; margin: 1rem 0; overflow-x: auto; white-space: nowrap; }
+
+footer { border-top: 1px solid var(--rule); margin-top: 4rem; padding-top: 1.5rem; color: var(--muted); font-size: 0.88rem; }
+</style>
+</head>
+<body>
+<div class="shell">
+    <nav class="toc" aria-label="Contents">
+        <a class="brand" href="#top">Laravel Docs RAG</a>
+        <ol>
+            <li><a href="#how-it-works"><span class="num">01</span>How RAG works</a></li>
+            <li><a href="#evaluation"><span class="num">02</span>Evaluating retrieval</a></li>
+            <li><a href="#hybrid"><span class="num">03</span>Hybrid search</a></li>
+            <li><a href="#providers"><span class="num">04</span>Providers and costs</a></li>
+            <li><a href="#private"><span class="num">05</span>Private documents</a></li>
+        </ol>
+        <p class="repo"><a href="https://github.com/phoenix1331/laravel-docs-rag-playground">Source and setup on GitHub</a></p>
+    </nav>
+
+    <main id="top">
+        <header class="hero">
+            <p class="eyebrow">Laravel 13 · PostgreSQL · pgvector</p>
+            <h1>Laravel Docs RAG Playground</h1>
+            <p class="lede">Ask a question about the Laravel documentation and get an answer written only from the official docs, with numbered citations to the exact sections it used.</p>
+            <p>The point is learning. Managed RAG services hide the interesting parts; this project builds every step in plain Laravel so you can see it, change one thing, and measure what it did.</p>
+
+            <div class="stats" role="list">
+                <div class="stat" role="listitem"><b>2,215</b><span>sections from the 13.x docs</span></div>
+                <div class="stat" role="listitem"><b>96.8%</b><span>right section in the top 5</span></div>
+                <div class="stat" role="listitem"><b>0.803</b><span>mean reciprocal rank</span></div>
+                <div class="stat" role="listitem"><b>1</b><span>embedding request per eval run</span></div>
+            </div>
+        </header>
+
+        <!-- 01 -->
+        <section id="how-it-works" aria-labelledby="h-how">
+            <h2 id="h-how"><span class="num">01</span>How RAG works here</h2>
+            <p class="intro">Retrieval-augmented generation means: before asking an AI model a question, <strong>retrieve</strong> the passages most likely to hold the answer and put them in the prompt, then <strong>generate</strong> an answer from those passages only.</p>
+            <p>The model does not need to have memorised the Laravel docs, cannot drift to an older version's API, and can cite where each claim came from. The system has two halves that run at different times.</p>
+
+            <div class="pipeline" aria-label="The ingest and answer pipelines">
+                <div class="lane">
+                    <div class="lane-label"><b>Ingest</b> · once per docs version, in the background</div>
+                    <ol class="steps">
+                        <li><b>Docs</b><span>Markdown pages from laravel/docs</span></li>
+                        <li class="key"><b>Chunk</b><span>split on headings</span></li>
+                        <li class="key"><b>Embed</b><span>text to 1,024 numbers</span></li>
+                        <li><b>Store</b><span>Postgres + pgvector</span></li>
+                    </ol>
+                </div>
+                <div class="lane">
+                    <div class="lane-label"><b>Answer</b> · every question, during the request</div>
+                    <ol class="steps">
+                        <li><b>Question</b><span>plain English</span></li>
+                        <li><b>Embed</b><span>same model</span></li>
+                        <li class="key"><b>Retrieve</b><span>6 closest sections</span></li>
+                        <li><b>Prompt</b><span>sections + rules</span></li>
+                        <li><b>Answer</b><span>streamed, with citations</span></li>
+                    </ol>
+                </div>
+            </div>
+
+            <h3>1. Getting the docs</h3>
+            <p><code>App\Docs\DocsRepository</code> keeps a shallow git clone of the <a href="https://github.com/laravel/docs">laravel/docs</a> branch for each version in <code>storage/app/docs/{version}</code>. Each page is a Markdown file such as <code>queues.md</code>.</p>
+
+            <h3>2. Chunking: splitting pages into sections</h3>
+            <p>A whole page is too big and too broad to retrieve: a question about job batches should get the job batching section, not all of <code>queues.md</code>. <code>App\Chunking\MarkdownChunker</code> splits each page along the document's own structure.</p>
+            <div class="table-wrap"><table>
+                <thead><tr><th>Rule</th><th>Why</th></tr></thead>
+                <tbody>
+                    <tr><td>Split on <code>##</code> and <code>###</code> headings, never inside code blocks</td><td>Each chunk is one topic, and code examples stay whole</td></tr>
+                    <tr><td>Keep the heading as the chunk's first line</td><td>The chunk makes sense on its own, to the model and in the UI</td></tr>
+                    <tr><td>Keep the anchor from <code>&lt;a name="..."&gt;</code></td><td>Citations link to the exact section on laravel.com</td></tr>
+                    <tr><td>Pack sections over 800 tokens into parts by paragraph</td><td>Very long sections dilute the embedding and waste prompt space</td></tr>
+                    <tr><td>Merge sections under 60 tokens into a neighbour</td><td>A two-line section has too little meaning to be found reliably</td></tr>
+                    <tr><td>Strip HTML wrappers, link lists and base64 images</td><td>Noise in the text becomes noise in the embedding</td></tr>
+                </tbody>
+            </table></div>
+            <p>The 13.x docs become 2,215 chunks, median about 300 tokens, none over 800. Splitting by structure rather than by a fixed number of characters is the most important choice here: a fixed-size splitter cuts code blocks in half and mixes the end of one topic with the start of the next.</p>
+
+            <h3>3. Embedding: turning text into meaning</h3>
+            <p>An embedding model turns text into a list of numbers, a <strong>vector</strong>, positioned so that texts with similar meaning have similar vectors. "Hide records instead of deleting them" and a section titled "Soft Deleting" share almost no words, but their vectors are close.</p>
+            <p>Each chunk is embedded with its heading path in front, for example <code>Eloquent: Getting Started &gt; Deleting Models &gt; Soft Deleting</code>, so even a short section carries the context of where it sits. Vectors are stored in a <code>vector(1024)</code> column with an HNSW index for fast nearest-neighbour search.</p>
+            <p>Re-ingesting is incremental: a page whose git blob hash is unchanged is skipped, and within a changed page only sections whose text changed are re-embedded. A docs update costs a few embedding calls, not a full re-run.</p>
+
+            <h3>4. Retrieval: finding the closest sections</h3>
+            <p>The question is embedded with the same model, and Postgres returns the 6 chunks whose vectors are closest by cosine similarity (1.0 means identical direction, 0 unrelated).</p>
+<pre>DocChunk::forVersion($version)
+    -&gt;selectVectorDistance('embedding', $embedding, as: 'distance')
+    -&gt;whereVectorSimilarTo('embedding', $embedding, minSimilarity: 0.0)
+    -&gt;limit($topK)
+    -&gt;get();</pre>
+            <div class="callout"><p>The version filter is part of the SQL query, so an answer about Laravel 13 can never be built from Laravel 12 sections. That guarantee lives in the database, not in the prompt.</p></div>
+            <p>See exactly what retrieval returns, with no AI model involved, with <code>make search Q="how do job batches work"</code>. An optional <a href="#hybrid">hybrid mode</a> adds keyword search.</p>
+
+            <h3>5. Deciding whether to answer at all</h3>
+            <p>Some questions are not covered by the docs ("How do I configure Kubernetes autoscaling?"). Refusal has two layers.</p>
+            <div class="grid-2">
+                <div class="card"><h4>Similarity threshold</h4><p>If the best section scores under <code>RAG_MIN_SIMILARITY</code> (0.30), reply "not covered" without calling the model. Free, and catches clear misses.</p></div>
+                <div class="card"><h4>Model judgement</h4><p>The prompt tells the model to reply exactly <code>NOT_COVERED</code> when the sections do not answer the question. Catches off-topic sections that scored above the threshold.</p></div>
+            </div>
+            <p>The <a href="#threshold">evaluation</a> shows why both are needed: most unanswerable questions score as high as real ones.</p>
+
+            <h3>6. Prompting and answering</h3>
+            <p><code>App\Answering\DocsPrompt</code> puts the rules in the system instructions and the numbered sections plus the question in the user message.</p>
+<pre>&lt;section number="1" title="Eloquent: Getting Started &gt; Deleting Models &gt; Soft Deleting"
+         url="https://laravel.com/docs/13.x/eloquent#soft-deleting"&gt;
+### Soft Deleting
+In addition to actually removing records from your database...
+&lt;/section&gt;
+
+Question: How do I hide records instead of permanently removing them?</pre>
+            <p>The rules: answer only from the sections, cite them as <code>[1]</code>, <code>[2]</code>, reply <code>NOT_COVERED</code> if they do not answer the question, say which part is missing if they answer only part of it, and treat section text as reference material, never as instructions.</p>
+            <p>The answer streams into the page as it is written. Citations become chips linking to the sources, and a retrieved context panel shows every section the model was given with its similarity, so you can see why an answer came out the way it did. Every question is logged with what was retrieved, what was cited, the provider and token usage.</p>
+        </section>
+
+        <!-- 02 -->
+        <section id="evaluation" aria-labelledby="h-eval">
+            <h2 id="h-eval"><span class="num">02</span>Evaluating retrieval</h2>
+            <p class="intro"><code>make eval</code> is a developer tool you run the way you run unit tests: on demand, after changing something. It is not part of answering questions and never runs on its own.</p>
+            <p>It asks one question: <strong>for each of a fixed set of questions, did search find the right docs sections?</strong> The result is a score, so you can tell from a number rather than by eye whether a change made search better or worse.</p>
+<pre>For each question in database/eval/questions.json:
+    run the same search users get (top 5 sections)
+    compare with the sections known to be correct
+    mark it a hit or a miss
+Print the score, the misses and the refusals</pre>
+
+            <h3>Why it checks search, not answers</h3>
+            <p>The model can only answer from the sections search hands it. If search misses the right section, the answer is wrong however good the model is. Checking search on its own is <strong>cheap</strong> (no AI model, all questions embedded in one request), <strong>repeatable</strong> (same data, same score) and <strong>fast</strong> (seconds).</p>
+            <p>It does not judge the written answer: faithfulness, citation accuracy or clarity need a model acting as judge, or human review. If search finds the right material, modern models usually answer well; if it does not, no prompt will fix it.</p>
+
+            <div class="callout">
+                <p><strong>An analogy.</strong> A new employee answers customer emails using a filing cabinet. Answering questions is the employee doing the job: pull out the relevant files, write a reply. The eval is a test: 36 practice questions where you already know which file answers each one. You check whether they pulled out the right file, not how well they write, because if they cannot find the right file the reply will be wrong anyway.</p>
+            </div>
+
+            <h3>How it differs from unit tests</h3>
+            <div class="table-wrap"><table>
+                <thead><tr><th></th><th>Unit tests · <code>make test</code></th><th>Eval · <code>make eval</code></th></tr></thead>
+                <tbody>
+                    <tr><td>Asks</td><td>Is the code correct?</td><td>How good is search on the real docs?</td></tr>
+                    <tr><td>Result</td><td>Pass or fail</td><td>A score to compare with previous runs</td></tr>
+                    <tr><td>Data</td><td>Fake test data, offline</td><td>The real ingested docs and real embeddings</td></tr>
+                    <tr><td>A failure means</td><td>Something is broken</td><td>Something to look at; aim to raise the score over time</td></tr>
+                </tbody>
+            </table></div>
+            <p>So it is closer to a benchmark than a test: nobody expects 100%, and a score only means something next to another score.</p>
+
+            <h3>The question set</h3>
+            <ul>
+                <li><strong>31 answerable questions</strong> in the words a developer would use, not copied from headings. Each lists the sections that count as correct; any one of them is a hit.</li>
+                <li><strong>5 unanswerable questions</strong>: three off-topic (Kubernetes, PyTorch, Django) and two near misses that sound like Laravel features but are not (Oracle drivers, a built-in GraphQL server).</li>
+            </ul>
+<pre>{ "id": "eloquent-soft-deletes", "version": "13.x",
+  "question": "How do I hide records instead of permanently removing them from the table?",
+  "expected": ["eloquent.md#soft-deleting"] }</pre>
+            <p>Once a system is live, the best source of questions is its own logs: every answer a user reports as wrong becomes a new question.</p>
+
+            <h3 id="reading-the-numbers">Reading the numbers</h3>
+            <h4>Recall@k: was a right section in the top k?</h4>
+            <div class="table-wrap"><table>
+                <thead><tr><th>Question</th><th>Position of the correct section</th><th>Hit in top 5?</th></tr></thead>
+                <tbody>
+                    <tr><td>Soft deletes</td><td class="n">1st</td><td>Yes</td></tr>
+                    <tr><td>Eager loading</td><td class="n">3rd</td><td>Yes</td></tr>
+                    <tr><td>Cache locks</td><td class="n">not returned</td><td>No</td></tr>
+                    <tr><td>Mail queueing</td><td class="n">5th</td><td>Yes</td></tr>
+                </tbody>
+            </table></div>
+            <p>3 of 4 are hits: <strong>recall@5 = 75%</strong>. The same results give recall@1 = 25% (only soft deletes came first) and recall@3 = 50%. Choose k to match how many sections the model actually sees (6 here): a correct section ranked 20th is no use.</p>
+            <p>Strictly, because any one expected section counts, this is what information retrieval calls <em>hit rate</em>. Most RAG write-ups use recall@k in this hit-or-miss sense.</p>
+
+            <h4>MRR: how near the top?</h4>
+            <p>Recall treats first and fifth place the same. Mean reciprocal rank scores each question as 1 divided by the position of its first correct section, and a miss as 0.</p>
+            <div class="formula">(1/1 + 1/3 + 0 + 1/5) / 4 = (1 + 0.33 + 0 + 0.2) / 4 = 0.38</div>
+            <p>High recall with low MRR means search finds the right material but buries it, which is a job for reranking.</p>
+
+            <h4 id="threshold">The threshold and the misses</h4>
+            <p>The eval also reports answerable questions the similarity threshold alone would refuse (false refusals), whether each unanswerable question is caught by the threshold or reaches the model, and a misses table showing what came back instead of the right section. The misses are where you learn something: "stop a scheduled task overlapping" once found queues' "preventing job overlaps", the same idea on the wrong page.</p>
+
+            <h3 id="results">Results</h3>
+            <p>Laravel 13.x docs, 2,215 sections, 31 answerable questions. Recall@5:</p>
+            <div class="bars" role="img" aria-label="Recall at 5: word hashing 32.3 percent, vector 96.8 percent, hybrid 93.5 percent">
+                <div class="bar"><span>Word hashing (offline)</span><div class="track"><div class="fill faint" style="width:32.3%"></div></div><span class="v">32.3%</span></div>
+                <div class="bar"><span>Vector, voyage-4</span><div class="track"><div class="fill" style="width:96.8%"></div></div><span class="v">96.8%</span></div>
+                <div class="bar"><span>Hybrid</span><div class="track"><div class="fill" style="width:93.5%"></div></div><span class="v">93.5%</span></div>
+            </div>
+            <div class="table-wrap"><table>
+                <thead><tr><th>Search</th><th>Recall@1</th><th>Recall@5</th><th>Recall@10</th><th>MRR</th></tr></thead>
+                <tbody>
+                    <tr><td>Word hashing (offline <code>fake</code> embedder, no meaning)</td><td class="n">-</td><td class="n">32.3%</td><td class="n">-</td><td class="n">0.255</td></tr>
+                    <tr><td>Vector, Voyage <code>voyage-4</code>, 1,024 dimensions</td><td class="n best">67.7%</td><td class="n best">96.8%</td><td class="n best">100%</td><td class="n best">0.803</td></tr>
+                    <tr><td>Hybrid, vector plus keyword with RRF</td><td class="n">58.1%</td><td class="n">93.5%</td><td class="n">96.8%</td><td class="n">0.744</td></tr>
+                </tbody>
+            </table></div>
+            <ul>
+                <li><strong>Real embeddings matter.</strong> Word hashing finds a third of answers; a real embedding model finds nearly all of them.</li>
+                <li><strong>Check the data before trusting a score.</strong> The first vector run scored 61.3%: 11 of its 12 misses were pages that had not finished ingesting.</li>
+                <li><strong>The only vector miss at k = 5</strong> is "make sure only one process runs a piece of code at a time": scheduling's "run on one server" and queues' "unique jobs" outrank "atomic locks" because neighbouring features share the vocabulary.</li>
+                <li><strong>The threshold cannot separate the unanswerable questions.</strong> Four of five score 0.45 to 0.51, the same range as real answers, so refusal depends on the model's <code>NOT_COVERED</code>.</li>
+            </ul>
+
+            <h3>When to run it</h3>
+            <div class="table-wrap"><table>
+                <thead><tr><th>You changed</th><th>Run eval to see</th></tr></thead>
+                <tbody>
+                    <tr><td>Chunking rules</td><td>Whether the right sections are still found</td></tr>
+                    <tr><td>The embedding model</td><td>Whether the new model finds things better</td></tr>
+                    <tr><td>The search method</td><td>Whether hybrid beats vector, or a reranker helps</td></tr>
+                    <tr><td>The docs (re-ingest)</td><td>Whether anything broke</td></tr>
+                </tbody>
+            </table></div>
+<pre>make eval                         # vector, top 5
+make eval ARGS="--mode=hybrid"    # hybrid
+make eval ARGS="--k=10"           # recall@10</pre>
+        </section>
+
+        <!-- 03 -->
+        <section id="hybrid" aria-labelledby="h-hybrid">
+            <h2 id="h-hybrid"><span class="num">03</span>Hybrid search</h2>
+            <p class="intro">Hybrid search runs two different searches for the same question and merges their results, so each covers the other's weak spot.</p>
+            <div class="table-wrap"><table>
+                <thead><tr><th></th><th>Vector search (the default)</th><th>Keyword search</th></tr></thead>
+                <tbody>
+                    <tr><td>Finds by</td><td>Meaning</td><td>Words, stemmed so "deleting" matches "delete"</td></tr>
+                    <tr><td>Good at</td><td>Rewording: "hide records" finds Soft Deleting</td><td>Exact terms: <code>whereVectorSimilarTo</code>, error messages, config keys</td></tr>
+                    <tr><td>Weak at</td><td>Exact identifiers, which barely move a vector</td><td>Synonyms: "hide records" never matches "soft delete"</td></tr>
+                </tbody>
+            </table></div>
+
+            <h3>The keyword side</h3>
+            <p>A generated Postgres column holds a full-text index of each section and is kept up to date by Postgres on every write, with a GIN index (about 3 ms per query). Heading words are weighted above body words.</p>
+<pre>search_vector tsvector generated always as (
+    setweight(to_tsvector('english', heading_path), 'A')
+    || setweight(to_tsvector('english', content), 'B')
+) stored</pre>
+            <p>For the Soft Deleting section it holds entries like <code>'delet':4A,7A,9B,23B</code>: the stemmed word, its positions, and whether it came from the heading (A) or the body (B).</p>
+            <div class="callout warn"><p>The question is matched on <strong>any</strong> of its words, not all. Requiring every word, as Postgres's <code>websearch_to_tsquery</code> does, matched 0 of 2,215 sections for a typical full question; any-word matched 600 for the ranking to sort.</p></div>
+
+            <h3>Merging with reciprocal rank fusion</h3>
+            <p>Vector similarity (0 to 1) and keyword rank are on unrelated scales, so their scores cannot be added. RRF ignores scores and uses only each section's position in each list.</p>
+            <div class="formula">score = 1 / (60 + vector position) + 1 / (60 + keyword position)</div>
+            <p>Sections high in both lists win, and a section found by only one list still counts, just less. The 60 (<code>RAG_RRF_K</code>) stops one list's first place outweighing everything. Each search contributes its top 24 candidates and the fused list is cut to 6. Cosine similarity is still attached to every result, so the refusal threshold behaves the same in both modes.</p>
+
+            <h3>Results</h3>
+            <div class="table-wrap"><table>
+                <thead><tr><th></th><th>Vector</th><th>Hybrid</th></tr></thead>
+                <tbody>
+                    <tr><td>Recall@1</td><td class="n best">67.7%</td><td class="n down">58.1%</td></tr>
+                    <tr><td>Recall@5</td><td class="n best">96.8%</td><td class="n down">93.5%</td></tr>
+                    <tr><td>Recall@10</td><td class="n best">100%</td><td class="n down">96.8%</td></tr>
+                    <tr><td>MRR</td><td class="n best">0.803</td><td class="n down">0.744</td></tr>
+                </tbody>
+            </table></div>
+            <p>14 questions changed position: 5 better, 9 worse.</p>
+            <div class="grid-2">
+                <div class="card"><h4>Better</h4><p>Batch callback 5th to 1st; unique jobs, soft deletes and queued listeners 2nd to 1st. The section heading shares the question's words.</p></div>
+                <div class="card"><h4>Worse</h4><p>"Work through a huge table in small pieces" 2nd to 9th; "run a shell command" 1st to 6th. Keyword search ranks the right section low or not at all, and sections both searches half-match push it down.</p></div>
+            </div>
+            <p>That second card is RRF's known bias: anything in both lists, even about 20th in each, outscores a section one list ranked 4th and the other missed, because 1/80 + 1/80 is more than 1/64.</p>
+
+            <h3>So what is the point of hybrid?</h3>
+            <p>Hybrid lost because of what this question set measures, not because keyword search is useless.</p>
+            <ul>
+                <li><strong>The questions favour meaning.</strong> They were deliberately written in plain wording, and only one names a method.</li>
+                <li><strong>Real users often type exact things:</strong> method names, error messages, config keys, version numbers. An embedding of <code>whereVectorSimilarTo</code> carries little meaning; a keyword index matches it exactly.</li>
+                <li><strong>Other documents lean on keywords more:</strong> part numbers, clause numbers and names are where vector-only systems are known to miss.</li>
+                <li><strong>The fusion can be tuned:</strong> weight the keyword list lower, take fewer keyword candidates, or use keyword matches only to break near-ties.</li>
+            </ul>
+            <div class="callout"><p>This is the reason the eval exists. Hybrid search is the usual recommendation, and on this data it made results worse. Without measuring it would have been switched on because it sounded better. Vector stays the default; hybrid stays available with <code>--mode=hybrid</code>.</p></div>
+        </section>
+
+        <!-- 04 -->
+        <section id="providers" aria-labelledby="h-providers">
+            <h2 id="h-providers"><span class="num">04</span>Providers and costs</h2>
+            <p class="intro">A RAG system uses two kinds of AI model, and they can come from different companies.</p>
+            <div class="table-wrap"><table>
+                <thead><tr><th>Role</th><th>Does</th><th>Called</th><th>Default</th></tr></thead>
+                <tbody>
+                    <tr><td>Embedding model</td><td>Turns text into vectors for search</td><td>Once per section at ingest, once per question</td><td>Voyage AI <code>voyage-4</code></td></tr>
+                    <tr><td>Chat model</td><td>Writes the answer from the sections</td><td>Once per answered question</td><td>Anthropic Claude</td></tr>
+                </tbody>
+            </table></div>
+            <p>Both go through the <a href="https://github.com/laravel/ai">Laravel AI SDK</a>, so switching is a <code>.env</code> change.</p>
+
+            <h3>Why Voyage for embeddings</h3>
+            <p>Anthropic does not offer an embeddings API; it recommends Voyage AI. Voyage also embeds <strong>documents</strong> and <strong>queries</strong> differently (<code>input_type</code>), which improves retrieval; ingest sends <code>document</code> and questions send <code>query</code>.</p>
+
+            <h3>Switching to OpenAI</h3>
+<pre>RAG_EMBEDDING_PROVIDER=openai
+RAG_EMBEDDING_DIMENSIONS=1536
+RAG_CHAT_PROVIDER=openai
+OPENAI_API_KEY=sk-...</pre>
+            <p>Changing the answer provider takes effect immediately. Changing the embedding provider, model or dimensions needs <code>make fresh</code> and a fresh ingest: vectors from different models cannot be compared, and ingest refuses to mix them. Dimensions must be 2,000 or fewer, the pgvector HNSW limit.</p>
+
+            <h3>Free and offline options</h3>
+            <div class="table-wrap"><table>
+                <thead><tr><th>Option</th><th>Embeddings</th><th>Answers</th><th>Notes</th></tr></thead>
+                <tbody>
+                    <tr><td><code>fake</code></td><td>Word hashing</td><td>Lists the top sections</td><td>Free, offline, no key; retrieval is poor (32% recall@5)</td></tr>
+                    <tr><td><code>ollama</code></td><td>e.g. <code>nomic-embed-text</code></td><td>e.g. <code>qwen3.5:4b</code></td><td>Free, runs on your machine</td></tr>
+                    <tr><td>Gemini, Groq</td><td>Gemini embeddings</td><td>Free tiers</td><td>Busy free models often reply "overloaded"</td></tr>
+                    <tr><td>Voyage, no card</td><td>Free allowance</td><td></td><td>3 requests and 10K tokens a minute</td></tr>
+                </tbody>
+            </table></div>
+            <p>A Claude Pro subscription does not include API credit; the Anthropic API is billed separately.</p>
+
+            <h3>Rate limits and throttling</h3>
+            <p>A naive ingest sends requests as fast as it can, gets rejected, retries, and makes things worse. <code>EmbeddingThrottle</code> reserves evenly spaced slots in the cache, shared by every worker, so requests go out at a rate the provider accepts. Card-free Voyage settings:</p>
+<pre>RAG_EMBEDDING_BATCH_TOKENS=8000   # tokens per request
+RAG_EMBEDDING_RPM=2               # one under the limit, leaving room for questions
+RAG_EMBEDDING_TPM=9000
+RAG_INGEST_WORKERS=1</pre>
+            <p>A full 13.x ingest (about 800K tokens) then takes around 90 minutes. Questions skip the throttle, so the app stays usable during an ingest. Jobs that are rate limited anyway back off from 15 seconds to 5 minutes over 8 attempts and log why.</p>
+
+            <h3>Why Postgres and not a vector database</h3>
+            <div class="table-wrap"><table>
+                <thead><tr><th>Option</th><th>Why not here</th></tr></thead>
+                <tbody>
+                    <tr><td>A dedicated vector database</td><td>One more service, with keyword search and filters living elsewhere</td></tr>
+                    <tr><td>MongoDB Atlas Vector Search</td><td>Automatic embedding hides the step this project exists to teach</td></tr>
+                    <tr><td>MySQL</td><td>Laravel 13's native <code>vector</code> column and <code>whereVectorSimilarTo</code> target pgvector</td></tr>
+                </tbody>
+            </table></div>
+            <p>PostgreSQL with pgvector keeps vectors, full-text search, metadata and the version filter in one database and one query. At thousands to low millions of sections, that is plenty.</p>
+        </section>
+
+        <!-- 05 -->
+        <section id="private" aria-labelledby="h-private">
+            <h2 id="h-private"><span class="num">05</span>Adapting this for private documents</h2>
+            <p class="intro">The Laravel docs are public: anyone may read any section, sending them to an AI provider leaks nothing, and nobody will ask for one to be deleted. Pointing the same design at company documents or customer data changes most of that.</p>
+
+            <h3>Where the models run</h3>
+            <div class="table-wrap"><table>
+                <thead><tr><th>Option</th><th>Data leaves your control?</th><th>Trade-off</th></tr></thead>
+                <tbody>
+                    <tr><td>Local models (Ollama)</td><td>No</td><td>Weaker models on your hardware, but nothing leaves the machine</td></tr>
+                    <tr><td>A cloud provider's hosted models in your own account</td><td>Stays within your cloud agreement</td><td>Contracts and data residency you already manage</td></tr>
+                    <tr><td>Vendor APIs (Voyage, Anthropic, OpenAI)</td><td>Yes, under the vendor's terms</td><td>Best models, least work; check retention and training terms</td></tr>
+                </tbody>
+            </table></div>
+            <p>Embeddings and answers can use different options, for example local embeddings with a vendor chat model.</p>
+
+            <h3>Permissions belong in the query</h3>
+            <p>This project filters by docs version in SQL. Permissions work the same way: store who may see each section on the chunk row and filter on it alongside the vector search.</p>
+<pre>DocChunk::forVersion($version)
+    -&gt;whereIn('team_id', $user-&gt;teamIds())
+    -&gt;whereVectorSimilarTo('embedding', $embedding)</pre>
+            <div class="callout warn"><p>Never retrieve broadly and ask the model to ignore what the user should not see. Anything in the prompt can appear in the answer.</p></div>
+
+            <div class="grid-2">
+                <div class="card"><h4>Vectors are sensitive data</h4><p>Embeddings are not anonymised: text can be partly reconstructed from a vector, and similarity search reveals what is stored. Give the vector column the same access controls, encryption and backup policy as the text.</p></div>
+                <div class="card"><h4>Deletion</h4><p>Remove a document from every copy: chunk rows with their vectors and full-text index, the source copy, logged questions and answers that quoted it, and caches and backups on their normal schedule.</p></div>
+                <div class="card"><h4>Redaction before embedding</h4><p>Mask personal data the assistant never needs (bank details, national insurance numbers, health data) in the chunking step, before anything is sent to a provider or stored as a vector.</p></div>
+                <div class="card"><h4>Prompt injection</h4><p>Retrieved text is untrusted. Keep permission filtering in the query, give the model no tools it could be talked into using, and render answers as untrusted output (this project escapes HTML and disables unsafe links).</p></div>
+                <div class="card"><h4>Audit logging</h4><p>The <code>questions</code> table records each question, what was retrieved and cited, provider, model and tokens. For private data, add who asked, and keep the log under the same rules as the documents, because it now contains them.</p></div>
+            </div>
+        </section>
+
+        <footer>
+            <p>Built with Laravel 13, Livewire 4, PostgreSQL 17 with pgvector, Redis and Horizon, and the Laravel AI SDK. Setup, environment variables and every <code>make</code> target are in the <a href="https://github.com/phoenix1331/laravel-docs-rag-playground#getting-started">README</a>.</p>
+        </footer>
+    </main>
+</div>
+</body>
+</html>

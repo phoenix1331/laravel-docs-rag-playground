@@ -1,58 +1,130 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Laravel Docs RAG Playground
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Ask questions about the Laravel documentation and get answers written only from the official docs, with citations to the exact sections, built as a fully visible retrieval-augmented generation (RAG) pipeline in Laravel 13 and PostgreSQL.
 
-## About Laravel
+## What this demonstrates
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+Most RAG tutorials hand the hard parts to a managed service. This project builds every step in plain Laravel so you can see it, change it and measure it:
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+- **Structure-aware chunking**: docs pages split on their own headings, code blocks kept whole, anchors preserved for citations
+- **Embeddings and vector search** in Postgres with pgvector, using Laravel 13's native `vector` column and `whereVectorSimilarTo`
+- **Grounded, cited answers** that stream into a Livewire page, with a two-layer refusal for questions the docs do not cover
+- **A retrieval eval** (`make eval`) that scores search with recall@k and MRR, so changes are judged by numbers rather than by eye
+- **Hybrid search** (vector plus Postgres full-text, merged with reciprocal rank fusion), and the measured result that it lost on this data
+- **Incremental, rate-limited ingestion** on queues, so a free-tier embedding account can index the whole docs site
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+The explainers are on the project page, **[https://phoenix1331.github.io/laravel-docs-rag-playground/](https://phoenix1331.github.io/laravel-docs-rag-playground/)** (source: [`docs/index.html`](docs/index.html)):
 
-## Learning Laravel
+| Section | Covers |
+|---|---|
+| [How RAG works here](https://phoenix1331.github.io/laravel-docs-rag-playground/#how-it-works) | Docs page to cited answer, step by step |
+| [Evaluating retrieval](https://phoenix1331.github.io/laravel-docs-rag-playground/#evaluation) | What eval is, recall@k and MRR with worked examples, results per stage |
+| [Hybrid search](https://phoenix1331.github.io/laravel-docs-rag-playground/#hybrid) | Keyword plus vector search, RRF, and why hybrid lost here |
+| [Providers and costs](https://phoenix1331.github.io/laravel-docs-rag-playground/#providers) | Voyage and Claude defaults, switching to OpenAI, free tiers, throttling, why Postgres |
+| [Adapting this for private documents](https://phoenix1331.github.io/laravel-docs-rag-playground/#private) | Hosting, permissions, deletion, redaction, prompt injection, audit |
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+### Results
 
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+Laravel 13.x docs, 2,215 sections, 31 answerable questions:
 
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
+| Search | Recall@1 | Recall@5 | MRR |
+|---|---|---|---|
+| Word hashing (offline, no meaning) | | 32.3% | 0.255 |
+| Vector, Voyage `voyage-4` | 67.7% | 96.8% | 0.803 |
+| Hybrid, vector plus keyword | 58.1% | 93.5% | 0.744 |
 
-## Agentic Development
+## Tech stack
 
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
+| Layer | Choice |
+|---|---|
+| Framework | Laravel 13, PHP 8.4 |
+| Database | PostgreSQL 17 with pgvector |
+| Runtime | Docker, FrankenPHP (`dunglas/frankenphp:php8.4`) |
+| Queue and cache | Redis 8, Laravel Horizon |
+| AI | Laravel AI SDK (`laravel/ai`): Voyage AI embeddings, Anthropic Claude answers by default |
+| Front end | Livewire 4, Tailwind CSS 4, Vite |
+| Tests | Pest; SQLite in memory, plus a Postgres-only group |
 
-```bash
-composer require laravel/boost --dev
+## Getting started
 
-php artisan boost:install
-```
+### Prerequisites
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+- Docker with Docker Compose, and `make`
+- PHP 8.4 and Node.js on the host, for the git hooks (Pint runs on commit)
+- [`osv-scanner`](https://github.com/google/osv-scanner) for the pre-commit security audit: `go install github.com/google/osv-scanner/cmd/osv-scanner@latest`
+- Run `npm install` once on the host to activate the Husky git hooks
+- API keys: a [Voyage AI](https://www.voyageai.com) key for embeddings and an [Anthropic](https://console.anthropic.com) key for answers. To try it with no keys at all, set `RAG_EMBEDDING_PROVIDER=fake` and `RAG_CHAT_PROVIDER=fake` (offline, much weaker retrieval)
+- Ports 8000, 5173, 5433 and 6379 free on the host (change them in `.env` if not)
 
-## Contributing
+Claude Code MCP servers (`.mcp.json`), only if you use Claude Code on this repo:
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+- GitHub MCP authenticates with `gh auth token`: run `gh auth login` once per machine
+- MySQL MCP reads `MYSQL_HOST`, `MYSQL_PORT`, `MYSQL_USER`, `MYSQL_PASSWORD`, `MYSQL_DATABASE` (default `127.0.0.1:3306`, user `root`). This project uses Postgres, so the MySQL server is unused here
+- Playwright and Context7 need only `npx`
 
-## Code of Conduct
+### Steps
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+1. `make install` creates `.env` from `.env.example`, builds the image, installs PHP and JS dependencies, generates the app key, starts the containers and migrates
+2. Add `VOYAGEAI_API_KEY` and `ANTHROPIC_API_KEY` to `.env`. On a card-free Voyage account also set the [throttle values](https://phoenix1331.github.io/laravel-docs-rag-playground/#providers)
+3. `make horizon-restart` so the queue workers pick up the new `.env`
+4. `make ingest V=13.x` clones the docs and indexes them (minutes with a paid key, about 90 minutes card-free; progress is also visible at http://localhost:8000/horizon)
+5. Open http://localhost:8000 and ask a question, or use `make ask Q="how do I soft delete a model"`
 
-## Security Vulnerabilities
+Other useful targets:
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+| Command | Does |
+|---|---|
+| `make search Q="..."` | Show what retrieval returns, with scores, without calling a chat model |
+| `make eval` | Score retrieval against the eval set (`ARGS="--mode=hybrid"`, `ARGS="--k=10"`) |
+| `make test` / `make test-pgsql` | Run the test suite on SQLite / the Postgres-only tests |
+| `make lint` | Fix code style with Pint |
+| `make help` | List every target |
 
-## License
+## Environment variables
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+Beyond the standard Laravel keys:
+
+| Key | Default | Description |
+|---|---|---|
+| `APP_PORT` | `8000` | Host port for the app |
+| `VITE_PORT` | `5173` | Host port for Vite hot reload |
+| `FORWARD_DB_PORT` | `5433` | Host port for Postgres (5432 is often taken) |
+| `FORWARD_REDIS_PORT` | `6379` | Host port for Redis |
+| `VOYAGEAI_API_KEY`, `ANTHROPIC_API_KEY` | | Keys for the default providers; `OPENAI_API_KEY`, `GEMINI_API_KEY`, `GROQ_API_KEY` for others |
+| `RAG_EMBEDDING_PROVIDER` | `voyageai` | Embedding provider, or `fake` for offline |
+| `RAG_EMBEDDING_MODEL` | provider default | Embedding model |
+| `RAG_EMBEDDING_DIMENSIONS` | `1024` | Vector size; at most 2000. Changing it needs `make fresh` and a re-ingest |
+| `RAG_EMBEDDING_BATCH_TOKENS` | `0` | Estimated tokens per embedding request (0 = no cap) |
+| `RAG_EMBEDDING_RPM`, `RAG_EMBEDDING_TPM` | `0` | Embedding requests and tokens per minute for the throttle (0 = off) |
+| `RAG_CHAT_PROVIDER` | `anthropic` | Answer provider, or `fake` for offline |
+| `RAG_CHAT_MODEL` | provider default | Answer model |
+| `RAG_CHAT_FALLBACK_PROVIDER`, `RAG_CHAT_FALLBACK_MODEL` | | Optional provider to fail over to |
+| `RAG_RETRIEVAL_MODE` | `vector` | `vector` or `hybrid` |
+| `RAG_TOP_K` | `6` | Sections given to the model per question |
+| `RAG_MIN_SIMILARITY` | `0.3` | Below this best similarity, reply "not covered" without calling the model |
+| `RAG_RRF_K` | `60` | Reciprocal rank fusion constant for hybrid mode |
+| `RAG_LOG_QUESTIONS` | `true` | Store each question, retrieval and token usage |
+| `RAG_INGEST_WORKERS` | `2` | Horizon worker processes for ingestion |
+| `RAG_DEFAULT_VERSION` | `13.x` | Docs version selected by default |
+
+## Endpoints
+
+| Route | Purpose |
+|---|---|
+| `GET /` | The ask page: version selector, streamed answer, citations, retrieved context panel |
+| `GET /up` | Health check, used by the container healthcheck |
+| `GET /horizon` | Queue dashboard for ingestion (local only) |
+
+`request.http` has these for VS Code REST Client and JetBrains HTTP Client. Answers are Livewire actions rather than a JSON API; the CLI equivalents are `docs:ask`, `docs:search` and `rag:eval`.
+
+## Architecture notes
+
+- **The version filter is in SQL, not the prompt.** A 13.x answer cannot be built from 12.x sections, whatever the model does. The same pattern is how permissions would work for [private documents](https://phoenix1331.github.io/laravel-docs-rag-playground/#private).
+- **Refusal has two layers.** A similarity threshold refuses clear misses with no model call; the model's `NOT_COVERED` reply catches the rest. The eval showed unanswerable questions score as high as real ones, so the threshold alone cannot do it.
+- **Chunk by structure, embed with context.** Sections follow the docs' headings, and each is embedded with its heading path (`Eloquent > Deleting Models > Soft Deleting`), so short sections are still findable.
+- **Ingest is incremental at two levels.** Unchanged pages are skipped by git blob hash; within a changed page only changed sections are re-embedded, and moved sections reuse their vectors.
+- **Throttle rather than retry.** Embedding requests reserve evenly spaced slots shared by every worker, so a card-free account indexes the whole site instead of thrashing on rate-limit errors. Questions skip the throttle, so the app stays usable during an ingest.
+- **Measure before switching.** Hybrid search is the usual recommendation; here it scored lower, so vector stays the default. The [eval](https://phoenix1331.github.io/laravel-docs-rag-playground/#evaluation) is what made that a decision rather than a guess.
+- **Postgres for everything.** Vectors, full-text search, metadata and filters in one database and one query, instead of a separate vector store. See [why](https://phoenix1331.github.io/laravel-docs-rag-playground/#providers).
+
+Orientation for contributors, including every design decision and its reason, is in [`CONTEXT.md`](CONTEXT.md).

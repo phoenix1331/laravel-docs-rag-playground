@@ -241,7 +241,8 @@ Migrations check the driver and skip pgvector-only columns/indexes on SQLite. `t
 | `app/Retrieval/` | `Retriever`, `RetrievalResult`, `RetrievedChunk` |
 | `app/Contracts/Embedder.php`, `app/Services/Embeddings/` | Embedding contract, AI SDK implementation, deterministic fake |
 | `config/rag.php` | Embedding/chat provider and model, chunk limits, top k, similarity threshold, retrieval mode, docs source |
-| `Makefile` | All developer commands; `make help` lists them (`make ingest V=13.x`, `make horizon-restart` after code changes) |
+| `Makefile` | All developer commands; `make help` lists them. `make install` is first-time setup on a fresh clone (vendor and node_modules are gitignored and the container command needs both); `make ingest V=13.x`; `make horizon-restart` after code or `.env` changes |
+| `README.md`, `docs/index.html` | README is the front door (setup, env vars, architecture notes). `docs/index.html` is the GitHub Pages site (one self-contained page, app design tokens, `docs/.nojekyll`) holding the explainers: how RAG works, evaluation, hybrid, providers, private documents. Served at https://phoenix1331.github.io/laravel-docs-rag-playground/ once Pages is enabled (Settings > Pages > `main`, `/docs`). Update its results tables when eval numbers change |
 | `pint.json` | Laravel preset plus `declare_strict_types` on every PHP file |
 | `.husky/` | `commit-msg` (lowercase conventional commits, no scopes) and `pre-commit` (Pint, osv-scanner on `composer.lock`); hook bodies are POSIX `sh` |
 | `app/Providers/AppServiceProvider.php` | Swaps the default `artisan serve` dev command for `frankenphp php-server` |
