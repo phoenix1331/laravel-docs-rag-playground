@@ -25,11 +25,17 @@ use Illuminate\Database\Eloquent\Model;
     'embedding_model',
     'embedding',
 ])]
-#[Hidden(['embedding'])]
+#[Hidden(['embedding', 'search_vector'])]
 class DocChunk extends Model
 {
     /** @use HasFactory<DocChunkFactory> */
     use HasFactory;
+
+    /**
+     * Postgres text search configuration for the generated search_vector column. Full-text queries
+     * must use the same one, or stemmed words will not match.
+     */
+    public const string TEXT_SEARCH_CONFIG = 'english';
 
     /**
      * Get the attributes that should be cast.
