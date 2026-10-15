@@ -1,5 +1,8 @@
 # Laravel Docs RAG Playground
 
+<img width="3098" height="1652" alt="Screenshot 2026-10-14 213914" src="https://github.com/user-attachments/assets/3213ae07-c857-4523-98e2-b67dd2568eb3" />
+
+
 Ask questions about the Laravel documentation and get answers written only from the official docs, with citations to the exact sections, built as a fully visible retrieval-augmented generation (RAG) pipeline in Laravel 13 and PostgreSQL.
 
 ## What this demonstrates
@@ -24,6 +27,8 @@ The explainers are on the project page, **[https://phoenix1331.github.io/laravel
 | [Adapting this for private documents](https://phoenix1331.github.io/laravel-docs-rag-playground/#private) | Hosting, permissions, deletion, redaction, prompt injection, audit |
 
 ### Results
+
+<img width="2316" height="1006" alt="Screenshot 2026-10-15 112859" src="https://github.com/user-attachments/assets/b2cc1fa4-0182-4331-8ae5-7128d4b7c4d1" />
 
 Laravel 13.x docs, 2,215 sections, 31 answerable questions:
 
