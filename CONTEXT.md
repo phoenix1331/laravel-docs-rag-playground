@@ -245,6 +245,7 @@ Migrations check the driver and skip pgvector-only columns/indexes on SQLite. `t
 | `README.md`, `docs/index.html` | README is the front door (setup, env vars, architecture notes). `docs/index.html` is the GitHub Pages site (one self-contained page, app design tokens, `docs/.nojekyll`) holding the explainers: how RAG works, evaluation, hybrid, providers, private documents. Served at https://phoenix1331.github.io/laravel-docs-rag-playground/ once Pages is enabled (Settings > Pages > `main`, `/docs`). Update its results tables when eval numbers change |
 | `pint.json` | Laravel preset plus `declare_strict_types` on every PHP file |
 | `.husky/` | `commit-msg` (lowercase conventional commits, no scopes) and `pre-commit` (Pint, osv-scanner on `composer.lock`); hook bodies are POSIX `sh` |
+| `.mcp.json` | Claude Code MCP servers: Playwright, GitHub, Context7, and Postgres (`postgres-mcp` 0.3.0 via `uvx`, `--access-mode=restricted` so writes are rejected, `DATABASE_URI` from the shell). Pinned with `--with 'mcp<2'` because 0.3.0 imports FastMCP, which MCP SDK 2.x renamed |
 | `app/Providers/AppServiceProvider.php` | Swaps the default `artisan serve` dev command for `frankenphp php-server` |
 
 ## Decisions

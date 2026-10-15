@@ -2,7 +2,9 @@
   "mcpServers": {
     "playwright": {
       "command": "npx",
-      "args": ["@playwright/mcp@latest"]
+      "args": [
+        "@playwright/mcp@latest"
+      ]
     },
     "github": {
       "command": "sh",
@@ -13,17 +15,21 @@
     },
     "context7": {
       "command": "npx",
-      "args": ["-y", "@upstash/context7-mcp"]
+      "args": [
+        "-y",
+        "@upstash/context7-mcp"
+      ]
     },
-    "mysql": {
-      "command": "npx",
-      "args": ["-y", "@benborla29/mcp-server-mysql"],
+    "postgres": {
+      "command": "uvx",
+      "args": [
+        "--with",
+        "mcp<2",
+        "postgres-mcp==0.3.0",
+        "--access-mode=restricted"
+      ],
       "env": {
-        "MYSQL_HOST": "${MYSQL_HOST:-127.0.0.1}",
-        "MYSQL_PORT": "${MYSQL_PORT:-3306}",
-        "MYSQL_USER": "${MYSQL_USER:-root}",
-        "MYSQL_PASS": "${MYSQL_PASSWORD:-}",
-        "MYSQL_DB": "${MYSQL_DATABASE:-}"
+        "DATABASE_URI": "${DATABASE_URI:-postgresql://laravel:secret@127.0.0.1:5432/laravel}"
       }
     }
   }

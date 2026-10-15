@@ -64,7 +64,7 @@ Laravel 13.x docs, 2,215 sections, 31 answerable questions:
 Claude Code MCP servers (`.mcp.json`), only if you use Claude Code on this repo:
 
 - GitHub MCP authenticates with `gh auth token`: run `gh auth login` once per machine
-- MySQL MCP reads `MYSQL_HOST`, `MYSQL_PORT`, `MYSQL_USER`, `MYSQL_PASSWORD`, `MYSQL_DATABASE` (default `127.0.0.1:3306`, user `root`). This project uses Postgres, so the MySQL server is unused here
+- Postgres MCP ([`postgres-mcp`](https://github.com/crystaldba/postgres-mcp), read-only `restricted` mode) runs through `uvx`, so it needs [uv](https://docs.astral.sh/uv/). It reads `DATABASE_URI` from the shell (default `postgresql://laravel:secret@127.0.0.1:5432/laravel`); export it if you changed `FORWARD_DB_PORT` or the database credentials
 - Playwright and Context7 need only `npx`
 
 ### Steps
