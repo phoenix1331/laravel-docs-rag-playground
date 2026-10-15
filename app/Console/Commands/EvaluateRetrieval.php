@@ -61,6 +61,8 @@ class EvaluateRetrieval extends Command
             return self::FAILURE;
         }
 
+        $this->components->info(sprintf('Embedding %d questions in one request; this waits for a free slot if an ingest is using the embedding rate limit.', count($questions)));
+
         $report = $evaluator->evaluate($questions, $version, $mode, $k);
         $answerable = count($report->answerable());
 
