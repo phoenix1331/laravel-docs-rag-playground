@@ -59,7 +59,7 @@ Laravel 13.x docs, 2,215 sections, 31 answerable questions:
 - [`osv-scanner`](https://github.com/google/osv-scanner) for the pre-commit security audit: `go install github.com/google/osv-scanner/cmd/osv-scanner@latest`
 - Run `npm install` once on the host to activate the Husky git hooks
 - API keys: a [Voyage AI](https://www.voyageai.com) key for embeddings and an [Anthropic](https://console.anthropic.com) key for answers. To try it with no keys at all, set `RAG_EMBEDDING_PROVIDER=fake` and `RAG_CHAT_PROVIDER=fake` (offline, much weaker retrieval)
-- Ports 8000, 5173, 5433 and 6379 free on the host (change them in `.env` if not)
+- Ports 8000, 5173, 5432 and 6379 free on the host (change them in `.env` if not)
 
 Claude Code MCP servers (`.mcp.json`), only if you use Claude Code on this repo:
 
@@ -93,7 +93,7 @@ Beyond the standard Laravel keys:
 |---|---|---|
 | `APP_PORT` | `8000` | Host port for the app |
 | `VITE_PORT` | `5173` | Host port for Vite hot reload |
-| `FORWARD_DB_PORT` | `5433` | Host port for Postgres (5432 is often taken) |
+| `FORWARD_DB_PORT` | `5432` | Host port for connecting to Postgres from your machine; the app itself uses 5432 inside Docker |
 | `FORWARD_REDIS_PORT` | `6379` | Host port for Redis |
 | `VOYAGEAI_API_KEY`, `ANTHROPIC_API_KEY` | | Keys for the default providers; `OPENAI_API_KEY`, `GEMINI_API_KEY`, `GROQ_API_KEY` for others |
 | `RAG_EMBEDDING_PROVIDER` | `voyageai` | Embedding provider, or `fake` for offline |

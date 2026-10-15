@@ -20,7 +20,7 @@ Laravel 13 playground that answers questions about the Laravel documentation usi
 |---|---|---|---|
 | `app` | 8000 | `APP_PORT` (8000) | `php artisan dev`: FrankenPHP, Horizon, Pail, Vite; dashboard at `/horizon` |
 | `app` (Vite) | 5173 | `VITE_PORT` (5173) | HMR host is `localhost` |
-| `pgsql` | 5432 | `FORWARD_DB_PORT` (5433) | 5432 is taken on the dev host |
+| `pgsql` | 5432 | `FORWARD_DB_PORT` (5432) | Default 5432; the original dev machine overrides it to 5433 in its own `.env` because a local Postgres holds 5432 |
 | `redis` | 6379 | `FORWARD_REDIS_PORT` (6379) | Queue and cache store |
 
 Inside the network the app reaches `pgsql:5432` and `redis:6379`.
