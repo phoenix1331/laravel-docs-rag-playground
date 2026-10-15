@@ -229,3 +229,16 @@ describe('oversized blocks', function () {
             ->toContain('receives an access token');
     });
 });
+
+describe('encoding', function () {
+    it('keeps multibyte characters whole', function () {
+        // ✅ ends in byte 0x85, which a non-unicode \R treats as a line break.
+        $markdown = "# Forms\n\n<a name=\"validation\"></a>\n## Validation\n\nValid ✅ and Å, then\r\nmore text.\n";
+
+        $chunk = (new MarkdownChunker(800, 0))->chunk($markdown)[0];
+
+        expect(mb_check_encoding($chunk->embeddingText(), 'UTF-8'))->toBeTrue()
+            ->and($chunk->content)->toContain('Valid ✅ and Å, then')
+            ->and($chunk->content)->not->toContain("\r");
+    });
+});

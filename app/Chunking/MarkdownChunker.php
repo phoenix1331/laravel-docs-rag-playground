@@ -80,7 +80,8 @@ final class MarkdownChunker
         $pendingAnchor = null;
         $fence = null;
 
-        foreach (preg_split('/\R/', $markdown) as $line) {
+        // Not \R: without the u flag it also matches a lone 0x85 byte, splitting characters such as ✅ (e2 9c 85).
+        foreach (preg_split('/\r\n|\r|\n/', $markdown) as $line) {
             if ($fence !== null) {
                 $current['lines'][] = $line;
                 $fence = $this->closesFence($line, $fence) ? null : $fence;
