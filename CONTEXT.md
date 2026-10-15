@@ -181,6 +181,28 @@ Vector baseline (13.x, `voyage-4` 1024 dims, 2215 chunks, 2026-10-15):
 - Unanswerable best similarities (0.45 to 0.51) overlap answerable ones, so raising `RAG_MIN_SIMILARITY` cannot separate them; refusal depends on `NOT_COVERED`
 - The first partial-ingest run scored 61.3%: 11 of 12 misses were pages not yet stored. Check every page has chunks before trusting a score
 
+Hybrid vs vector (13.x, same data, same question embeddings, `RAG_RRF_K` 60, 4k candidates each):
+
+| Metric | Vector | Hybrid |
+|---|---|---|
+| Recall@1 | 67.7% | 58.1% |
+| Recall@5 | 96.8% | 93.5% |
+| Recall@10 | 100% | 96.8% |
+| MRR (k = 5) | 0.803 | 0.744 |
+| Unanswerable refused by threshold | 1 of 5 | 1 of 5 (similarity is unchanged) |
+
+14 of 31 questions changed rank: 5 better, 9 worse.
+
+| Change | Questions (vector rank to hybrid rank) | Why |
+|---|---|---|
+| Better | batch callback 5 to 1, unique jobs 2 to 1, soft deletes 2 to 1, queued listeners 2 to 1, form request 5 to 3 | The expected heading shares the question's words ("unique", "soft", "queued listener") |
+| Worse | retry failed 2 to 9, eager loading 1 to 5, processes 1 to 6, chunking 2 to 9, cache locks 9 to miss, plus 4 one-place drops | Paraphrased questions ("huge table in small pieces", "shell command") share few words with the section; keyword ranks it low or not at all, and sections both lists half-match outrank it |
+
+- Vector stays the default (`RAG_RETRIEVAL_MODE=vector`). Hybrid is available per request with `--mode=hybrid`
+- The eval set deliberately paraphrases (plain developer wording, not heading text) and only one question names a method, so it rewards meaning over keywords; hybrid's strength (exact identifiers, error text) is under-represented
+- Hybrid #1 for `cache-locks` was `cache.md#managing-locks-across-processes`, which arguably answers the question but is not in its expected list; check expected lists before reading a miss as a retrieval failure
+- Tuning to try: weight the keyword list below the vector list in the fusion, take fewer keyword candidates, or add questions that name identifiers
+
 ## Data model
 
 `doc_chunks`: one row per docs section (or part of an oversized section).
