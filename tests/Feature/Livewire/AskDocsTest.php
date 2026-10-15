@@ -64,7 +64,8 @@ it('only accepts configured versions', function () {
 });
 
 it('marks versions that have not been ingested', function () {
-    Livewire::test(AskDocs::class)->assertSee('12.x (not ingested)');
+    Livewire::test(AskDocs::class)
+        ->assertSeeInOrder(['13.x', '12.x (not ingested)', '11.x (not ingested)', '10.x (not ingested)']);
 });
 
 it('explains when the docs do not cover a question', function () {

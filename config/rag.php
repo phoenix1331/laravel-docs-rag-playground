@@ -109,7 +109,7 @@ return [
         'repository' => env('RAG_DOCS_REPOSITORY', 'https://github.com/laravel/docs.git'),
         'path' => storage_path('app/docs'),
         'base_url' => 'https://laravel.com/docs',
-        'versions' => ['13.x', '12.x'],
+        'versions' => ['13.x', '12.x', '11.x', '10.x'],
         'default_version' => env('RAG_DEFAULT_VERSION', '13.x'),
     ],
 
